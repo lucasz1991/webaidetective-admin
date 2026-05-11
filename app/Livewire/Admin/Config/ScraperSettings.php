@@ -350,20 +350,57 @@ class ScraperSettings extends Component
 
     private function resolveNodeBinary(): string
     {
-        $candidates = [
+        $environmentCandidates = array_filter([
+            env('SCRAPER_NODE_BINARY'),
+            env('NODE_BINARY'),
+            getenv('SCRAPER_NODE_BINARY') ?: null,
+            getenv('NODE_BINARY') ?: null,
+        ], static fn (mixed $candidate): bool => is_string($candidate) && trim($candidate) !== '');
+
+        $candidates = array_merge($environmentCandidates, [
             'C:\\Program Files\\nodejs\\node.exe',
             'C:\\Program Files (x86)\\nodejs\\node.exe',
             '/usr/bin/node',
             '/usr/local/bin/node',
-        ];
+            '/bin/node',
+            '/snap/bin/node',
+            '/usr/bin/nodejs',
+            '/usr/local/bin/nodejs',
+        ]);
+
+        foreach (glob('/opt/plesk/node/*/bin/node') ?: [] as $pleskCandidate) {
+            $candidates[] = $pleskCandidate;
+        }
+
+        $homeDirectory = getenv('HOME') ?: null;
+
+        if (is_string($homeDirectory) && trim($homeDirectory) !== '') {
+            foreach (glob($homeDirectory.'/.nvm/versions/node/*/bin/node') ?: [] as $nvmCandidate) {
+                $candidates[] = $nvmCandidate;
+            }
+        }
 
         foreach ($candidates as $candidate) {
-            if (File::exists($candidate)) {
+            if (is_string($candidate) && trim($candidate) !== '' && is_executable($candidate)) {
                 return $candidate;
             }
         }
 
-        throw new \RuntimeException('Node.js wurde fuer den Session-Aufbau nicht gefunden.');
+        foreach (['node', 'nodejs'] as $binaryName) {
+            $resolvedBinary = Process::run(['sh', '-lc', sprintf('command -v %s 2>/dev/null', $binaryName)]);
+
+            if (! $resolvedBinary->successful()) {
+                continue;
+            }
+
+            $candidate = trim($resolvedBinary->output());
+
+            if ($candidate !== '' && is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        throw new \RuntimeException('Node.js wurde fuer den Session-Aufbau nicht gefunden. Geprueft wurden feste Pfade, Plesk-/NVM-Installationen sowie `command -v node` und `command -v nodejs`.');
     }
 
     private function isAbsolutePath(string $path): bool
