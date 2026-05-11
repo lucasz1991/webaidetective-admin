@@ -293,7 +293,7 @@ class ScraperSettings extends Component
         File::put($path, json_encode($runtimeConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
         return $path;
-    }
+    } 
 
     private function resolveBaseProjectPath(): string
     {
