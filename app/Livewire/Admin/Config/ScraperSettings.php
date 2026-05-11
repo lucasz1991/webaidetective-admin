@@ -80,7 +80,7 @@ class ScraperSettings extends Component
             $runtimeConfig = $this->buildRuntimeConfig($storedSettings);
             $baseProjectPath = $this->resolveBaseProjectPath();
             $runtimeConfigPath = $this->writeRuntimeConfigFile($baseProjectPath, $runtimeConfig);
-            $nodeScript = $baseProjectPath.DIRECTORY_SEPARATOR.'resources'.DIRECTORY_SEPARATOR.'node'.DIRECTORY_SEPARATOR.'scraper'.DIRECTORY_SEPARATOR.'scrape-instagram.cjs';
+            $nodeScript = $this->resolveBaseNodeScriptPath($baseProjectPath);
 
             $result = Process::path($baseProjectPath)
                 ->timeout(max(240, $this->navigationTimeoutSeconds + 180))
@@ -106,6 +106,24 @@ class ScraperSettings extends Component
             if (isset($runtimeConfigPath) && File::exists($runtimeConfigPath)) {
                 File::delete($runtimeConfigPath);
             }
+        }
+
+        if (! $result->successful()) {
+            $warnings = array_values(array_filter([
+                trim($result->errorOutput()),
+                trim($result->output()),
+            ]));
+
+            $this->sessionBuildResult = [
+                'ok' => false,
+                'statusMessage' => 'Der Session-Aufbau ist beim Start des Node-Skripts fehlgeschlagen.',
+                'warnings' => $warnings !== [] ? $warnings : ['Der Node-Prozess wurde mit einem Fehler beendet.'],
+                'notes' => [],
+            ];
+
+            $this->dispatch('showAlert', 'Der Session-Aufbau ist fehlgeschlagen.', 'error');
+
+            return;
         }
 
         $payload = json_decode(trim($result->output()), true);
@@ -279,7 +297,38 @@ class ScraperSettings extends Component
 
     private function resolveBaseProjectPath(): string
     {
-        return dirname(base_path()).DIRECTORY_SEPARATOR.'webaidetective-base';
+        $configuredPath = trim((string) (
+            env('SCRAPER_BASE_PROJECT_PATH')
+            ?? getenv('SCRAPER_BASE_PROJECT_PATH')
+            ?? ''
+        ));
+
+        $candidates = array_filter([
+            $configuredPath,
+            dirname(base_path()).DIRECTORY_SEPARATOR.'webaidetective-base',
+        ], static fn (mixed $candidate): bool => is_string($candidate) && trim($candidate) !== '');
+
+        foreach ($candidates as $candidate) {
+            if (File::isDirectory($candidate)) {
+                return $candidate;
+            }
+        }
+
+        throw new \RuntimeException('Das Base-Projekt wurde nicht gefunden. Setze bei Bedarf `SCRAPER_BASE_PROJECT_PATH` auf den absoluten Pfad der Base-Installation.');
+    }
+
+    private function resolveBaseNodeScriptPath(string $baseProjectPath): string
+    {
+        $nodeScript = $baseProjectPath.DIRECTORY_SEPARATOR.'resources'.DIRECTORY_SEPARATOR.'node'.DIRECTORY_SEPARATOR.'scraper'.DIRECTORY_SEPARATOR.'scrape-instagram.cjs';
+
+        if (! File::exists($nodeScript)) {
+            throw new \RuntimeException(sprintf(
+                'Das Node-Skript fuer den Session-Aufbau wurde nicht gefunden: %s',
+                $nodeScript
+            ));
+        }
+
+        return $nodeScript;
     }
 
     private function encryptPasswordForBaseProject(?string $plainPassword): ?string
