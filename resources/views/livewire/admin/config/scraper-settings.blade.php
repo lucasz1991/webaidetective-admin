@@ -138,6 +138,31 @@
         <div class="rounded-lg border p-4 text-sm {{ $sessionResultClass }}">
             <p class="font-semibold">{{ $sessionBuildResult['statusMessage'] ?? 'Session-Aufbau abgeschlossen.' }}</p>
 
+            @if(!empty($sessionBuildResult['debugLogPath']))
+                <p class="mt-2 break-all text-xs">
+                    <span class="font-semibold">Debug-Log:</span>
+                    {{ $sessionBuildResult['debugLogPath'] }}
+                </p>
+            @endif
+
+            @if(!empty($sessionBuildResult['cookieDiagnostics']) || !empty($sessionBuildResult['loginDiagnostics']))
+                <div class="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                    <div class="rounded-md border border-current/20 bg-white/40 p-3">
+                        <p class="font-semibold">Cookie-Diagnose</p>
+                        <p class="mt-1">sessionid in Datei: {{ data_get($sessionBuildResult, 'cookieDiagnostics.sessionCookieProvided') ? 'Ja' : 'Nein' }}</p>
+                        <p>sessionid akzeptiert: {{ data_get($sessionBuildResult, 'cookieDiagnostics.sessionCookieAccepted') ? 'Ja' : 'Nein' }}</p>
+                        <p>sessionid nach Reload noch da: {{ data_get($sessionBuildResult, 'cookieDiagnostics.sessionCookieRetained') ? 'Ja' : 'Nein' }}</p>
+                    </div>
+                    <div class="rounded-md border border-current/20 bg-white/40 p-3">
+                        <p class="font-semibold">Login-Diagnose</p>
+                        <p class="mt-1">Auto-Login versucht: {{ data_get($sessionBuildResult, 'loginDiagnostics.attempted') ? 'Ja' : 'Nein' }}</p>
+                        <p>Formular gefunden: {{ data_get($sessionBuildResult, 'loginDiagnostics.formDetected') ? 'Ja' : 'Nein' }}</p>
+                        <p>Login erfolgreich: {{ data_get($sessionBuildResult, 'loginDiagnostics.success') ? 'Ja' : 'Nein' }}</p>
+                        <p>sessionid nach Login: {{ data_get($sessionBuildResult, 'loginDiagnostics.sessionCookiePresent') ? 'Ja' : 'Nein' }}</p>
+                    </div>
+                </div>
+            @endif
+
             @if(!empty($sessionBuildResult['notes']))
                 <ul class="mt-3 list-disc space-y-1 pl-5">
                     @foreach($sessionBuildResult['notes'] as $note)

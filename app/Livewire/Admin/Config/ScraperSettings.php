@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Config;
 
+use Illuminate\Encryption\Encrypter;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\File;
@@ -55,7 +56,8 @@ class ScraperSettings extends Component
         $this->navigationTimeoutSeconds = max(30, (int) ($settings['navigation_timeout_seconds'] ?? $this->navigationTimeoutSeconds));
         $this->postLoginWaitMs = max(500, (int) ($settings['post_login_wait_ms'] ?? $this->postLoginWaitMs));
         $this->typingDelayMs = max(0, (int) ($settings['typing_delay_ms'] ?? $this->typingDelayMs));
-        $this->hasStoredPassword = filled($settings['login_password_encrypted'] ?? null);
+        $this->hasStoredPassword = filled($settings['login_password_encrypted'] ?? null)
+            || filled($settings['login_password_base_encrypted'] ?? null);
     }
 
     public function saveSettings(): void
@@ -137,6 +139,7 @@ class ScraperSettings extends Component
         $settings = Setting::getValue('scraper', 'instagram_profile');
         $settings = is_array($settings) ? $settings : [];
         $settings['login_password_encrypted'] = null;
+        $settings['login_password_base_encrypted'] = null;
         $settings['updated_at'] = now()->toIso8601String();
 
         Setting::setValue('scraper', 'instagram_profile', $settings);
@@ -172,17 +175,34 @@ class ScraperSettings extends Component
         $existingPassword = is_array($existingSettings)
             ? ($existingSettings['login_password_encrypted'] ?? null)
             : null;
+        $existingBasePassword = is_array($existingSettings)
+            ? ($existingSettings['login_password_base_encrypted'] ?? null)
+            : null;
 
         $encryptedPassword = $existingPassword;
+        $runtimePassword = $this->decryptRuntimePassword($existingPassword);
 
         if (filled($validated['loginPassword'] ?? null)) {
-            $encryptedPassword = Crypt::encryptString($validated['loginPassword']);
+            $runtimePassword = $validated['loginPassword'];
+            $encryptedPassword = Crypt::encryptString($runtimePassword);
         }
 
-        if ($validated['autoLoginEnabled'] && (blank($validated['loginUsername']) || blank($encryptedPassword))) {
+        $baseEncryptedPassword = $existingBasePassword;
+
+        if (filled($runtimePassword)) {
+            $baseEncryptedPassword = $this->encryptPasswordForBaseProject($runtimePassword);
+        }
+
+        if ($validated['autoLoginEnabled'] && (blank($validated['loginUsername']) || blank($runtimePassword))) {
             $this->addError('loginUsername', 'Bitte hinterlege fuer den Auto-Login einen Instagram-Benutzernamen und ein Passwort.');
 
             throw new \RuntimeException('Auto-Login-Konfiguration unvollstaendig.');
+        }
+
+        if ($validated['autoLoginEnabled'] && blank($baseEncryptedPassword)) {
+            $this->addError('loginPassword', 'Das gespeicherte Passwort konnte nicht fuer die Base-Installation aufbereitet werden.');
+
+            throw new \RuntimeException('Base-Passwortverschluesselung fehlgeschlagen.');
         }
 
         $settings = [
@@ -194,6 +214,7 @@ class ScraperSettings extends Component
             'auto_login_enabled' => (bool) $validated['autoLoginEnabled'],
             'login_username' => trim((string) ($validated['loginUsername'] ?? '')),
             'login_password_encrypted' => $encryptedPassword,
+            'login_password_base_encrypted' => $baseEncryptedPassword,
             'navigation_timeout_seconds' => (int) $validated['navigationTimeoutSeconds'],
             'post_login_wait_ms' => (int) $validated['postLoginWaitMs'],
             'typing_delay_ms' => (int) $validated['typingDelayMs'],
@@ -203,7 +224,7 @@ class ScraperSettings extends Component
         Setting::setValue('scraper', 'instagram_profile', $settings);
 
         $this->loginPassword = '';
-        $this->hasStoredPassword = filled($encryptedPassword);
+        $this->hasStoredPassword = filled($encryptedPassword) || filled($baseEncryptedPassword);
         $this->headlessEnabled = true;
 
         return $settings;
@@ -211,6 +232,10 @@ class ScraperSettings extends Component
 
     private function buildRuntimeConfig(array $storedSettings): array
     {
+        $decryptedPassword = $this->decryptRuntimePassword($storedSettings['login_password_encrypted'] ?? null);
+        $passwordConfigured = filled($storedSettings['login_password_encrypted'] ?? null)
+            || filled($storedSettings['login_password_base_encrypted'] ?? null);
+
         return [
             'profileLabel' => (string) ($storedSettings['profile_label'] ?? 'instagram-default'),
             'persistentProfileEnabled' => (bool) ($storedSettings['persistent_profile_enabled'] ?? true),
@@ -219,7 +244,9 @@ class ScraperSettings extends Component
             'headlessEnabled' => false,
             'autoLoginEnabled' => (bool) ($storedSettings['auto_login_enabled'] ?? false),
             'loginUsername' => trim((string) ($storedSettings['login_username'] ?? '')),
-            'loginPassword' => $this->decryptRuntimePassword($storedSettings['login_password_encrypted'] ?? null),
+            'loginPassword' => $decryptedPassword,
+            'loginPasswordConfigured' => $passwordConfigured,
+            'loginPasswordDecryptable' => $decryptedPassword !== null || ! $passwordConfigured,
             'navigationTimeoutMs' => max(30000, ((int) ($storedSettings['navigation_timeout_seconds'] ?? 120)) * 1000),
             'postLoginWaitMs' => max(500, (int) ($storedSettings['post_login_wait_ms'] ?? 2500)),
             'typingDelayMs' => max(0, (int) ($storedSettings['typing_delay_ms'] ?? 35)),
@@ -253,6 +280,57 @@ class ScraperSettings extends Component
     private function resolveBaseProjectPath(): string
     {
         return dirname(base_path()).DIRECTORY_SEPARATOR.'webaidetective-base';
+    }
+
+    private function encryptPasswordForBaseProject(?string $plainPassword): ?string
+    {
+        $plainPassword = trim((string) $plainPassword);
+
+        if ($plainPassword === '') {
+            return null;
+        }
+
+        $baseAppKey = $this->resolveBaseAppKey();
+
+        if (! $baseAppKey) {
+            return null;
+        }
+
+        return $this->makeBaseProjectEncrypter($baseAppKey)->encryptString($plainPassword);
+    }
+
+    private function resolveBaseAppKey(): ?string
+    {
+        $environmentPath = $this->resolveBaseProjectPath().DIRECTORY_SEPARATOR.'.env';
+
+        if (! File::exists($environmentPath)) {
+            return null;
+        }
+
+        foreach (preg_split('/\r\n|\n|\r/', File::get($environmentPath)) as $line) {
+            $trimmedLine = trim($line);
+
+            if (! str_starts_with($trimmedLine, 'APP_KEY=')) {
+                continue;
+            }
+
+            return trim(substr($trimmedLine, 8), " \t\n\r\0\x0B\"'");
+        }
+
+        return null;
+    }
+
+    private function makeBaseProjectEncrypter(string $appKey): Encrypter
+    {
+        $key = str_starts_with($appKey, 'base64:')
+            ? base64_decode(substr($appKey, 7), true)
+            : $appKey;
+
+        if (! is_string($key) || strlen($key) !== 32) {
+            throw new \RuntimeException('Der APP_KEY der Base-Installation ist ungueltig.');
+        }
+
+        return new Encrypter($key, config('app.cipher', 'AES-256-CBC'));
     }
 
     private function resolveStorageAwarePath(string $configuredPath): string
