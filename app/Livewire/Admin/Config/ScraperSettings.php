@@ -305,7 +305,7 @@ class ScraperSettings extends Component
 
         $candidates = array_filter([
             $configuredPath,
-            dirname(base_path()).DIRECTORY_SEPARATOR.'webaidetective-base',
+            dirname(base_path()).DIRECTORY_SEPARATOR.'webaidetective',
         ], static fn (mixed $candidate): bool => is_string($candidate) && trim($candidate) !== '');
 
         foreach ($candidates as $candidate) {
