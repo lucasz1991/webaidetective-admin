@@ -36,6 +36,14 @@ class ScraperSettings extends Component
 
     public int $typingDelayMs = 35;
 
+    public int $relationshipListProcessTimeoutSeconds = 3600;
+
+    public int $relationshipListMaxScrollRounds = 1000;
+
+    public int $followerListMaxItems = 0;
+
+    public int $followingListMaxItems = 0;
+
     public ?array $sessionBuildResult = null;
 
     public function mount(): void
@@ -56,6 +64,10 @@ class ScraperSettings extends Component
         $this->navigationTimeoutSeconds = max(30, (int) ($settings['navigation_timeout_seconds'] ?? $this->navigationTimeoutSeconds));
         $this->postLoginWaitMs = max(500, (int) ($settings['post_login_wait_ms'] ?? $this->postLoginWaitMs));
         $this->typingDelayMs = max(0, (int) ($settings['typing_delay_ms'] ?? $this->typingDelayMs));
+        $this->relationshipListProcessTimeoutSeconds = max(240, (int) ($settings['relationship_list_process_timeout_seconds'] ?? $this->relationshipListProcessTimeoutSeconds));
+        $this->relationshipListMaxScrollRounds = max(20, (int) ($settings['relationship_list_max_scroll_rounds'] ?? $this->relationshipListMaxScrollRounds));
+        $this->followerListMaxItems = max(0, (int) ($settings['follower_list_max_items'] ?? $this->followerListMaxItems));
+        $this->followingListMaxItems = max(0, (int) ($settings['following_list_max_items'] ?? $this->followingListMaxItems));
         $this->hasStoredPassword = filled($settings['login_password_encrypted'] ?? null)
             || filled($settings['login_password_base_encrypted'] ?? null);
     }
@@ -187,6 +199,10 @@ class ScraperSettings extends Component
             'navigationTimeoutSeconds' => ['required', 'integer', 'min:30', 'max:300'],
             'postLoginWaitMs' => ['required', 'integer', 'min:500', 'max:15000'],
             'typingDelayMs' => ['required', 'integer', 'min:0', 'max:500'],
+            'relationshipListProcessTimeoutSeconds' => ['required', 'integer', 'min:240', 'max:7200'],
+            'relationshipListMaxScrollRounds' => ['required', 'integer', 'min:20', 'max:100000'],
+            'followerListMaxItems' => ['required', 'integer', 'min:0', 'max:1000000'],
+            'followingListMaxItems' => ['required', 'integer', 'min:0', 'max:1000000'],
         ]);
 
         $existingSettings = Setting::getValue('scraper', 'instagram_profile');
@@ -236,6 +252,10 @@ class ScraperSettings extends Component
             'navigation_timeout_seconds' => (int) $validated['navigationTimeoutSeconds'],
             'post_login_wait_ms' => (int) $validated['postLoginWaitMs'],
             'typing_delay_ms' => (int) $validated['typingDelayMs'],
+            'relationship_list_process_timeout_seconds' => (int) $validated['relationshipListProcessTimeoutSeconds'],
+            'relationship_list_max_scroll_rounds' => (int) $validated['relationshipListMaxScrollRounds'],
+            'follower_list_max_items' => (int) $validated['followerListMaxItems'],
+            'following_list_max_items' => (int) $validated['followingListMaxItems'],
             'updated_at' => now()->toIso8601String(),
         ];
 
@@ -268,6 +288,9 @@ class ScraperSettings extends Component
             'navigationTimeoutMs' => max(30000, ((int) ($storedSettings['navigation_timeout_seconds'] ?? 120)) * 1000),
             'postLoginWaitMs' => max(500, (int) ($storedSettings['post_login_wait_ms'] ?? 2500)),
             'typingDelayMs' => max(0, (int) ($storedSettings['typing_delay_ms'] ?? 35)),
+            'followerListMaxItems' => max(0, (int) ($storedSettings['follower_list_max_items'] ?? 0)),
+            'followingListMaxItems' => max(0, (int) ($storedSettings['following_list_max_items'] ?? 0)),
+            'relationshipListMaxScrollRounds' => max(20, (int) ($storedSettings['relationship_list_max_scroll_rounds'] ?? 1000)),
         ];
     }
 

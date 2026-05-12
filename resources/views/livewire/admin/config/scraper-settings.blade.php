@@ -117,6 +117,47 @@
                 </div>
             </div>
         </div>
+
+        <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
+            <h3 class="text-lg font-semibold text-gray-800">Follower- und Gefolgt-Listen</h3>
+            <p class="mt-1 text-sm text-gray-500">
+                Ein Limit von 0 bedeutet: alle von Instagram ladbaren Eintraege speichern. Die Scroll-Runden sind nur eine technische Sicherung gegen Endlosschleifen.
+            </p>
+
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+                <div>
+                    <label for="relationship-list-process-timeout" class="block text-sm font-medium text-gray-700">Listen-Timeout in Sekunden</label>
+                    <input id="relationship-list-process-timeout" type="number" min="240" max="7200" wire:model.defer="relationshipListProcessTimeoutSeconds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    @error('relationshipListProcessTimeoutSeconds')
+                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
+                    <label for="relationship-list-max-scroll-rounds" class="block text-sm font-medium text-gray-700">Maximale Scroll-Runden</label>
+                    <input id="relationship-list-max-scroll-rounds" type="number" min="20" max="100000" wire:model.defer="relationshipListMaxScrollRounds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    @error('relationshipListMaxScrollRounds')
+                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
+                    <label for="follower-list-max-items" class="block text-sm font-medium text-gray-700">Follower-Limit</label>
+                    <input id="follower-list-max-items" type="number" min="0" max="1000000" wire:model.defer="followerListMaxItems" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    @error('followerListMaxItems')
+                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
+                    <label for="following-list-max-items" class="block text-sm font-medium text-gray-700">Gefolgt-Limit</label>
+                    <input id="following-list-max-items" type="number" min="0" max="1000000" wire:model.defer="followingListMaxItems" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    @error('followingListMaxItems')
+                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="flex flex-wrap justify-end gap-3">
