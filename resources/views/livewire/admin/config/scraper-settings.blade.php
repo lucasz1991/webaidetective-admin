@@ -127,7 +127,7 @@
             <div class="mt-4 grid gap-4 md:grid-cols-2">
                 <div>
                     <label for="relationship-list-process-timeout" class="block text-sm font-medium text-gray-700">Listen-Timeout in Sekunden</label>
-                    <input id="relationship-list-process-timeout" type="number" min="240" max="7200" wire:model.defer="relationshipListProcessTimeoutSeconds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <input id="relationship-list-process-timeout" type="number" min="14400" max="21600" wire:model.defer="relationshipListProcessTimeoutSeconds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                     @error('relationshipListProcessTimeoutSeconds')
                         <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                     @enderror
@@ -135,7 +135,7 @@
 
                 <div>
                     <label for="relationship-list-max-scroll-rounds" class="block text-sm font-medium text-gray-700">Maximale Scroll-Runden</label>
-                    <input id="relationship-list-max-scroll-rounds" type="number" min="20" max="100000" wire:model.defer="relationshipListMaxScrollRounds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <input id="relationship-list-max-scroll-rounds" type="number" min="20" max="1000000" wire:model.defer="relationshipListMaxScrollRounds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                     @error('relationshipListMaxScrollRounds')
                         <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                     @enderror

@@ -36,9 +36,9 @@ class ScraperSettings extends Component
 
     public int $typingDelayMs = 35;
 
-    public int $relationshipListProcessTimeoutSeconds = 3600;
+    public int $relationshipListProcessTimeoutSeconds = 14400;
 
-    public int $relationshipListMaxScrollRounds = 1000;
+    public int $relationshipListMaxScrollRounds = 100000;
 
     public int $followerListMaxItems = 0;
 
@@ -64,7 +64,7 @@ class ScraperSettings extends Component
         $this->navigationTimeoutSeconds = max(30, (int) ($settings['navigation_timeout_seconds'] ?? $this->navigationTimeoutSeconds));
         $this->postLoginWaitMs = max(500, (int) ($settings['post_login_wait_ms'] ?? $this->postLoginWaitMs));
         $this->typingDelayMs = max(0, (int) ($settings['typing_delay_ms'] ?? $this->typingDelayMs));
-        $this->relationshipListProcessTimeoutSeconds = max(240, (int) ($settings['relationship_list_process_timeout_seconds'] ?? $this->relationshipListProcessTimeoutSeconds));
+        $this->relationshipListProcessTimeoutSeconds = max(14400, (int) ($settings['relationship_list_process_timeout_seconds'] ?? $this->relationshipListProcessTimeoutSeconds));
         $this->relationshipListMaxScrollRounds = max(20, (int) ($settings['relationship_list_max_scroll_rounds'] ?? $this->relationshipListMaxScrollRounds));
         $this->followerListMaxItems = max(0, (int) ($settings['follower_list_max_items'] ?? $this->followerListMaxItems));
         $this->followingListMaxItems = max(0, (int) ($settings['following_list_max_items'] ?? $this->followingListMaxItems));
@@ -199,8 +199,8 @@ class ScraperSettings extends Component
             'navigationTimeoutSeconds' => ['required', 'integer', 'min:30', 'max:300'],
             'postLoginWaitMs' => ['required', 'integer', 'min:500', 'max:15000'],
             'typingDelayMs' => ['required', 'integer', 'min:0', 'max:500'],
-            'relationshipListProcessTimeoutSeconds' => ['required', 'integer', 'min:240', 'max:7200'],
-            'relationshipListMaxScrollRounds' => ['required', 'integer', 'min:20', 'max:100000'],
+            'relationshipListProcessTimeoutSeconds' => ['required', 'integer', 'min:14400', 'max:21600'],
+            'relationshipListMaxScrollRounds' => ['required', 'integer', 'min:20', 'max:1000000'],
             'followerListMaxItems' => ['required', 'integer', 'min:0', 'max:1000000'],
             'followingListMaxItems' => ['required', 'integer', 'min:0', 'max:1000000'],
         ]);
@@ -290,7 +290,7 @@ class ScraperSettings extends Component
             'typingDelayMs' => max(0, (int) ($storedSettings['typing_delay_ms'] ?? 35)),
             'followerListMaxItems' => max(0, (int) ($storedSettings['follower_list_max_items'] ?? 0)),
             'followingListMaxItems' => max(0, (int) ($storedSettings['following_list_max_items'] ?? 0)),
-            'relationshipListMaxScrollRounds' => max(20, (int) ($storedSettings['relationship_list_max_scroll_rounds'] ?? 1000)),
+            'relationshipListMaxScrollRounds' => max(20, (int) ($storedSettings['relationship_list_max_scroll_rounds'] ?? 100000)),
         ];
     }
 
