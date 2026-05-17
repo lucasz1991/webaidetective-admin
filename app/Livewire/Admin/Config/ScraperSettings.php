@@ -386,7 +386,7 @@ class ScraperSettings extends Component
             $nodeScript = $this->resolveBaseNodeScriptPath($baseProjectPath);
 
             $result = Process::path($baseProjectPath)
-                ->timeout(max(240, ((int) ($storedSettings['navigation_timeout_seconds'] ?? 120)) + 180))
+                ->timeout(max(60, min(90, ((int) ($storedSettings['navigation_timeout_seconds'] ?? 120)) + 30)))
                 ->run([
                     $this->resolveNodeBinary(),
                     $nodeScript,
