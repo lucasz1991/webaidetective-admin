@@ -411,6 +411,22 @@ class ScraperSettings extends Component
             }
         }
 
+        $payload = json_decode(trim($result->output()), true);
+
+        if (is_array($payload)) {
+            $this->sessionBuildResult = $payload;
+            $this->hasStoredPassword = true;
+            $this->loginPassword = '';
+
+            $this->dispatch(
+                'showAlert',
+                $payload['ok'] ? 'Instagram-Session wurde aufgebaut.' : 'Instagram-Session konnte nicht aufgebaut werden.',
+                $payload['ok'] ? 'success' : 'warning'
+            );
+
+            return;
+        }
+
         if (! $result->successful()) {
             $warnings = array_values(array_filter([
                 trim($result->errorOutput()),
@@ -429,30 +445,14 @@ class ScraperSettings extends Component
             return;
         }
 
-        $payload = json_decode(trim($result->output()), true);
+        $this->sessionBuildResult = [
+            'ok' => false,
+            'statusMessage' => 'Der Session-Aufbau hat kein gueltiges JSON-Ergebnis geliefert.',
+            'warnings' => [trim($result->errorOutput())],
+            'notes' => [],
+        ];
 
-        if (! is_array($payload)) {
-            $this->sessionBuildResult = [
-                'ok' => false,
-                'statusMessage' => 'Der Session-Aufbau hat kein gueltiges JSON-Ergebnis geliefert.',
-                'warnings' => [trim($result->errorOutput())],
-                'notes' => [],
-            ];
-
-            $this->dispatch('showAlert', 'Der Session-Aufbau ist fehlgeschlagen.', 'error');
-
-            return;
-        }
-
-        $this->sessionBuildResult = $payload;
-        $this->hasStoredPassword = true;
-        $this->loginPassword = '';
-
-        $this->dispatch(
-            'showAlert',
-            $payload['ok'] ? 'Instagram-Session wurde aufgebaut.' : 'Instagram-Session konnte nicht aufgebaut werden.',
-            $payload['ok'] ? 'success' : 'warning'
-        );
+        $this->dispatch('showAlert', 'Der Session-Aufbau ist fehlgeschlagen.', 'error');
     }
 
     public function clearStoredPassword(): void
@@ -932,7 +932,9 @@ class ScraperSettings extends Component
 
         return [
             'profileLabel' => (string) ($storedSettings['profile_label'] ?? 'instagram-default'),
-            'persistentProfileEnabled' => (bool) ($storedSettings['persistent_profile_enabled'] ?? true),
+            // Session-Aufbau schreibt Cookies in die Cookie-Datei; ein persistentes Chrome-Profil darf hier nicht geteilt werden,
+            // weil Chrome sonst mit "browser is already running for ... userDataDir" sperrt.
+            'persistentProfileEnabled' => false,
             'browserProfilePath' => $this->resolveStorageAwarePath($storedSettings['browser_profile_path'] ?? 'browser-profiles/instagram/default'),
             'cookieFilePath' => $this->resolveStorageAwarePath($storedSettings['cookie_file_path'] ?? 'cookies/instagram-cookies.json'),
             'headlessEnabled' => false,
@@ -941,6 +943,7 @@ class ScraperSettings extends Component
             'loginPassword' => $decryptedPassword,
             'loginPasswordConfigured' => $passwordConfigured,
             'loginPasswordDecryptable' => $decryptedPassword !== null || ! $passwordConfigured,
+            'loginPasswordSource' => $decryptedPassword !== null ? 'admin_encrypted' : null,
             'navigationTimeoutMs' => max(30000, ((int) ($storedSettings['navigation_timeout_seconds'] ?? 120)) * 1000),
             'postLoginWaitMs' => max(500, (int) ($storedSettings['post_login_wait_ms'] ?? 2500)),
             'typingDelayMs' => max(0, (int) ($storedSettings['typing_delay_ms'] ?? 35)),
