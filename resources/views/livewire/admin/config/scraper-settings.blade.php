@@ -1,4 +1,4 @@
-<div class="space-y-6">
+<div class="space-y-6" wire:loading.class="opacity-50 pointer-events-none cursor-wait">
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
         <p class="font-semibold">Instagram-Scraper-Profil</p>
         <p class="mt-1">
