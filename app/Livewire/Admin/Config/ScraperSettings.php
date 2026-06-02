@@ -8,6 +8,7 @@ use App\Services\Scraper\ScraperProfileDatabaseStore;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Livewire\Component;
 
@@ -372,6 +373,27 @@ class ScraperSettings extends Component
         $this->dispatch('showAlert', 'Scraper-Account wurde geloescht.', 'success');
     }
 
+    public function clearProfileScrapeBlock(string $profileId): void
+    {
+        $databaseStore = app(ScraperProfileDatabaseStore::class);
+
+        if (! $databaseStore->isAvailable()) {
+            $this->dispatch('showAlert', 'Die Scraper-Profil-Datenbank ist nicht verfuegbar.', 'warning');
+
+            return;
+        }
+
+        $databaseStore->clearScrapeBlock($profileId);
+
+        $collection = $this->loadProfileCollection();
+        $this->activeProfileId = $collection['active_profile_id'];
+        $this->activeProfileIds = $collection['active_profile_ids'];
+        $this->profileOptions = $this->buildProfileOptions($collection);
+
+        session()->flash('success', 'Scraper-Account wurde entsperrt.');
+        $this->dispatch('showAlert', 'Scraper-Account wurde entsperrt.', 'success');
+    }
+
     public function buildInstagramSession(): void
     {
         try {
@@ -725,6 +747,11 @@ class ScraperSettings extends Component
             'relationship_list_max_scroll_rounds' => max(20, min(1000000, (int) ($profile['relationship_list_max_scroll_rounds'] ?? 100000))),
             'follower_list_max_items' => max(0, min(1000000, (int) ($profile['follower_list_max_items'] ?? 0))),
             'following_list_max_items' => max(0, min(1000000, (int) ($profile['following_list_max_items'] ?? 0))),
+            'scrape_blocked_at' => $this->nullableString($profile['scrape_blocked_at'] ?? null),
+            'scrape_blocked_until' => $this->nullableString($profile['scrape_blocked_until'] ?? null),
+            'scrape_blocked_reason' => $this->nullableString($profile['scrape_blocked_reason'] ?? null),
+            'is_scrape_blocked' => $this->isFutureTimestamp($profile['scrape_blocked_until'] ?? null),
+            'scrape_block_remaining_seconds' => $this->remainingSecondsUntil($profile['scrape_blocked_until'] ?? null),
             'updated_at' => (string) ($profile['updated_at'] ?? now()->toIso8601String()),
         ];
     }
@@ -749,6 +776,11 @@ class ScraperSettings extends Component
             'relationship_list_max_scroll_rounds' => 100000,
             'follower_list_max_items' => 0,
             'following_list_max_items' => 0,
+            'scrape_blocked_at' => null,
+            'scrape_blocked_until' => null,
+            'scrape_blocked_reason' => null,
+            'is_scrape_blocked' => false,
+            'scrape_block_remaining_seconds' => 0,
             'updated_at' => now()->toIso8601String(),
         ];
     }
@@ -812,6 +844,11 @@ class ScraperSettings extends Component
                     || filled($profile['login_password_base_encrypted'] ?? null),
                 'is_active' => in_array($profile['id'], $collection['active_profile_ids'], true),
                 'is_primary' => $profile['id'] === $collection['active_profile_id'],
+                'is_scrape_blocked' => (bool) ($profile['is_scrape_blocked'] ?? false),
+                'scrape_blocked_until' => $profile['scrape_blocked_until'] ?? null,
+                'scrape_blocked_until_label' => $this->formatTimestampLabel($profile['scrape_blocked_until'] ?? null),
+                'scrape_blocked_reason' => $profile['scrape_blocked_reason'] ?? null,
+                'scrape_block_remaining_seconds' => (int) ($profile['scrape_block_remaining_seconds'] ?? 0),
             ];
         }, $collection['profiles']);
     }
@@ -943,6 +980,49 @@ class ScraperSettings extends Component
         $value = trim($value);
 
         return $value !== '' ? $value : null;
+    }
+
+    private function isFutureTimestamp(mixed $value): bool
+    {
+        if (! is_scalar($value) || trim((string) $value) === '') {
+            return false;
+        }
+
+        try {
+            return Carbon::parse((string) $value)->isFuture();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function remainingSecondsUntil(mixed $value): int
+    {
+        if (! is_scalar($value) || trim((string) $value) === '') {
+            return 0;
+        }
+
+        try {
+            $until = Carbon::parse((string) $value);
+
+            return $until->isFuture() ? max(0, now()->diffInSeconds($until, false)) : 0;
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    private function formatTimestampLabel(mixed $value): ?string
+    {
+        if (! is_scalar($value) || trim((string) $value) === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse((string) $value)
+                ->timezone(config('app.timezone', 'Europe/Berlin'))
+                ->format('d.m.Y H:i');
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function buildRuntimeConfig(array $storedSettings): array

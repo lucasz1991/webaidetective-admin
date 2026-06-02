@@ -37,9 +37,9 @@
 
         <div class="divide-y divide-gray-200">
             @foreach($profileOptions as $profile)
-                <div wire:key="scraper-profile-{{ $profile['id'] }}" class="grid gap-4 border-l-4 px-5 py-4 text-sm lg:grid-cols-12 {{ $profile['is_primary'] ? 'border-l-blue-500 bg-blue-50/70' : ($profile['is_active'] ? 'border-l-emerald-500 bg-emerald-50/40' : 'border-l-transparent bg-white hover:bg-gray-50') }}">
+                <div wire:key="scraper-profile-{{ $profile['id'] }}" class="grid gap-4 border-l-4 px-5 py-4 text-sm lg:grid-cols-12 {{ $profile['is_scrape_blocked'] ? 'border-l-amber-500 bg-amber-50/70' : ($profile['is_primary'] ? 'border-l-blue-500 bg-blue-50/70' : ($profile['is_active'] ? 'border-l-emerald-500 bg-emerald-50/40' : 'border-l-transparent bg-white hover:bg-gray-50')) }}">
                     <div class="flex min-w-0 items-start gap-3 lg:col-span-4">
-                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md {{ $profile['is_primary'] ? 'bg-blue-600 text-white' : ($profile['is_active'] ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700') }} text-sm font-semibold">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md {{ $profile['is_scrape_blocked'] ? 'bg-amber-600 text-white' : ($profile['is_primary'] ? 'bg-blue-600 text-white' : ($profile['is_active'] ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700')) }} text-sm font-semibold">
                             {{ strtoupper(substr($profile['label'], 0, 1)) }}
                         </div>
                         <div class="min-w-0">
@@ -66,6 +66,12 @@
                             <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">Inaktiv</span>
                         @endif
 
+                        @if($profile['is_scrape_blocked'])
+                            <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-300">
+                                Instagram-Sperre bis {{ $profile['scrape_blocked_until_label'] ?? 'unbekannt' }}
+                            </span>
+                        @endif
+
                         <span class="rounded-full {{ $profile['has_stored_password'] ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' }} px-2.5 py-1 text-xs font-semibold">
                             {{ $profile['has_stored_password'] ? 'Passwort gespeichert' : 'Kein Passwort' }}
                         </span>
@@ -78,6 +84,11 @@
                         @if(! $profile['is_primary'])
                             <button type="button" wire:click="makePrimaryProfile('{{ $profile['id'] }}')" class="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm hover:bg-blue-50">
                                 Als Standard
+                            </button>
+                        @endif
+                        @if($profile['is_scrape_blocked'])
+                            <button type="button" wire:click="clearProfileScrapeBlock('{{ $profile['id'] }}')" class="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm hover:bg-amber-50">
+                                Sperre entfernen
                             </button>
                         @endif
                         @if(! $profile['is_active'])
