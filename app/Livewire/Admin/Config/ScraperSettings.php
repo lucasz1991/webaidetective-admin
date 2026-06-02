@@ -4,6 +4,7 @@ namespace App\Livewire\Admin\Config;
 
 use Illuminate\Encryption\Encrypter;
 use App\Models\Setting;
+use App\Services\Scraper\ScraperProfileDatabaseStore;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -394,6 +395,7 @@ class ScraperSettings extends Component
                     $runtimeConfigPath,
                     'login-session',
                 ]);
+            app(ScraperProfileDatabaseStore::class)->syncCookiePayloadsFromRuntimeConfig($runtimeConfig);
         } catch (\Throwable $exception) {
             $this->sessionBuildResult = [
                 'ok' => false,
@@ -624,17 +626,36 @@ class ScraperSettings extends Component
     private function loadProfileCollection(): array
     {
         $settings = Setting::getValue('scraper', 'instagram_profile');
+        $legacyCollection = is_array($settings)
+            ? $this->normalizeProfileCollection($settings)
+            : $this->normalizeProfileCollection([]);
+        $databaseStore = app(ScraperProfileDatabaseStore::class);
 
-        if (! is_array($settings)) {
-            return $this->normalizeProfileCollection([]);
+        if ($databaseStore->isAvailable()) {
+            $databaseStore->importLegacyCollectionIfMissing($legacyCollection, $this->resolveBaseStorageRootOrNull());
+            $databaseCollection = $databaseStore->loadProfileCollection($legacyCollection);
+
+            if (is_array($databaseCollection)) {
+                $normalizedCollection = $this->normalizeProfileCollection($databaseCollection);
+                $databaseStore->hydrateCookieFilesFromCollection($normalizedCollection, $this->resolveBaseStorageRootOrNull());
+
+                return $normalizedCollection;
+            }
         }
 
-        return $this->normalizeProfileCollection($settings);
+        return $legacyCollection;
     }
 
     private function persistProfileCollection(array $collection): void
     {
-        Setting::setValue('scraper', 'instagram_profile', $this->normalizeProfileCollection($collection));
+        $collection = $this->normalizeProfileCollection($collection);
+        $databaseStore = app(ScraperProfileDatabaseStore::class);
+
+        if ($databaseStore->isAvailable()) {
+            $databaseStore->persistProfileCollection($collection, $this->resolveBaseStorageRootOrNull());
+        }
+
+        Setting::setValue('scraper', 'instagram_profile', $collection);
     }
 
     private function normalizeProfileCollection(array $settings): array
@@ -931,6 +952,7 @@ class ScraperSettings extends Component
             || filled($storedSettings['login_password_base_encrypted'] ?? null);
 
         return [
+            'profileId' => trim((string) ($storedSettings['id'] ?? '')),
             'profileLabel' => (string) ($storedSettings['profile_label'] ?? 'instagram-default'),
             // Session-Aufbau schreibt Cookies in die Cookie-Datei; ein persistentes Chrome-Profil darf hier nicht geteilt werden,
             // weil Chrome sonst mit "browser is already running for ... userDataDir" sperrt.
@@ -1011,6 +1033,15 @@ class ScraperSettings extends Component
             .implode(', ', $checkedCandidates)
             .'. Setze bei Bedarf `SCRAPER_BASE_PROJECT_PATH` auf den absoluten Pfad der Base-Installation.'
         );
+    }
+
+    private function resolveBaseStorageRootOrNull(): ?string
+    {
+        try {
+            return $this->resolveBaseProjectPath().DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'app';
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function resolveBaseNodeScriptPath(string $baseProjectPath): string
