@@ -31,6 +31,14 @@
                 <button
                     type="button"
                     class="whitespace-nowrap border-b-2 px-1 pb-4 text-sm font-medium"
+                    :class="{ 'border-blue-500 text-blue-600': activeTab === 'scraperApi', 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700': activeTab !== 'scraperApi' }"
+                    @click="activeTab = 'scraperApi'"
+                >
+                    Scraper API
+                </button>
+                <button
+                    type="button"
+                    class="whitespace-nowrap border-b-2 px-1 pb-4 text-sm font-medium"
                     :class="{ 'border-blue-500 text-blue-600': activeTab === 'scraper', 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700': activeTab !== 'scraper' }"
                     @click="activeTab = 'scraper'"
                 >
@@ -72,6 +80,15 @@
                     </p>
                     <button type="button" @click="activeTab = 'scraper'" class="mt-3 text-sm font-medium text-blue-600">
                         Scraper-Einstellungen oeffnen
+                    </button>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <h3 class="text-lg font-semibold text-gray-700">Scraper Profil API</h3>
+                    <p class="mt-2 text-sm text-gray-600">
+                        Aktiviert den Zugang fuer die interne ScraperProfilApi und verwaltet das API-Passwort.
+                    </p>
+                    <button type="button" @click="activeTab = 'scraperApi'" class="mt-3 text-sm font-medium text-blue-600">
+                        Scraper API-Einstellungen oeffnen
                     </button>
                 </div>
             </div>
@@ -153,6 +170,36 @@
                     </button>
                 </x-slot>
             </x-settings-collapse>
+        </div>
+
+        <div x-show="activeTab === 'scraperApi'" x-cloak class="space-y-6" x-collapse.duration.300ms>
+            <h2 class="text-2xl font-semibold">Scraper Profil API</h2>
+            <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                Aktiviere oder deaktiviere die interne ScraperProfilApi und hinterlege ein Passwort zur Authentifizierung.
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                <div class="space-y-6">
+                    <label for="scraper-profile-api-enabled" class="flex items-center gap-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm font-medium text-gray-700">
+                        <input id="scraper-profile-api-enabled" type="checkbox" wire:model="scraperProfileApiEnabled" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        ScraperProfilApi aktiviert
+                    </label>
+
+                    <div>
+                        <label for="scraper-profile-api-password" class="block text-sm font-medium text-gray-700">API Passwort</label>
+                        <input id="scraper-profile-api-password" type="password" wire:model.defer="scraperProfileApiPassword" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <p class="mt-2 text-xs text-gray-500">Dieses Passwort wird von der ScraperProfilApi zur Authentifizierung verwendet.</p>
+                        @error('scraperProfileApiPassword')
+                            <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button wire:click="saveScraperProfileApiSettings" class="rounded-md bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600">
+                            Einstellungen speichern
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div x-show="activeTab === 'scraper'" x-cloak class="space-y-6" x-collapse.duration.300ms>

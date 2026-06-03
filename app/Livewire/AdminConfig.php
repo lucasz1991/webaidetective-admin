@@ -78,6 +78,9 @@ class AdminConfig extends Component
         'cash_register_api_key' => '',
     ];
 
+    public bool $scraperProfileApiEnabled = false;
+    public string $scraperProfileApiPassword = '';
+
     public $apiKeys = [];
 
     public $provision; 
@@ -111,7 +114,8 @@ class AdminConfig extends Component
         $this->apiSettings['cash_register_api_url'] = Setting::where('key', 'cash_register_api_url')->value('value');
         $this->apiSettings['cash_register_api_key'] = Setting::where('key', 'cash_register_api_key')->value('value');
 
-
+        $this->scraperProfileApiEnabled = (bool) Setting::getValue('scraper', 'profile_api_enabled');
+        $this->scraperProfileApiPassword = (string) (Setting::getValue('scraper', 'profile_api_password') ?? '');
     }
 
     public function saveApiSettings()
@@ -140,6 +144,19 @@ class AdminConfig extends Component
     
         // Erfolgsmeldung
         $this->dispatch('showAlert', 'API-Einstellungen wurden erfolgreich gespeichert.', 'success');
+    }
+
+    public function saveScraperProfileApiSettings()
+    {
+        $validated = $this->validate([
+            'scraperProfileApiEnabled' => ['boolean'],
+            'scraperProfileApiPassword' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        Setting::setValue('scraper', 'profile_api_enabled', $validated['scraperProfileApiEnabled']);
+        Setting::setValue('scraper', 'profile_api_password', $validated['scraperProfileApiPassword']);
+
+        $this->dispatch('showAlert', 'Scraper Profil API Einstellungen wurden gespeichert.', 'success');
     }
 
     public function loadApiKeys()
