@@ -15,6 +15,10 @@ class UserProfile extends Component
     public $userId;
     public $user;
     public Collection $trackedProfiles;
+    public bool $billingTablesReady = false;
+    public ?object $activeSubscription = null;
+    public ?object $creditWallet = null;
+    public Collection $creditTransactions;
 
 
     public $showMailModal = false; 
@@ -28,6 +32,7 @@ class UserProfile extends Component
     {
         $this->userId = $userId;
         $this->trackedProfiles = collect();
+        $this->creditTransactions = collect();
         $this->loadUser();
     }
 
@@ -35,6 +40,7 @@ class UserProfile extends Component
     {
         $this->user = User::findOrFail($this->userId);
         $this->trackedProfiles = $this->loadTrackedProfilesForUser();
+        $this->loadBillingData();
     }
 
     public function activateUser()
@@ -134,7 +140,59 @@ class UserProfile extends Component
         return view('livewire.admin.user-profile', [
             'user' => $this->user,
             'trackedProfiles' => $this->trackedProfiles,
+            'billingTablesReady' => $this->billingTablesReady,
+            'activeSubscription' => $this->activeSubscription,
+            'creditWallet' => $this->creditWallet,
+            'creditTransactions' => $this->creditTransactions,
         ])->layout('layouts.master');
+    }
+
+    private function loadBillingData(): void
+    {
+        $this->billingTablesReady = Schema::hasTable('plans')
+            && Schema::hasTable('subscriptions')
+            && Schema::hasTable('credit_wallets')
+            && Schema::hasTable('credit_transactions');
+
+        $this->activeSubscription = null;
+        $this->creditWallet = null;
+        $this->creditTransactions = collect();
+
+        if (! $this->billingTablesReady) {
+            return;
+        }
+
+        $this->activeSubscription = DB::table('subscriptions')
+            ->leftJoin('plans', 'plans.id', '=', 'subscriptions.plan_id')
+            ->where('subscriptions.user_id', $this->userId)
+            ->where('subscriptions.status', 'active')
+            ->orderByDesc('subscriptions.started_at')
+            ->orderByDesc('subscriptions.id')
+            ->select([
+                'subscriptions.id',
+                'subscriptions.status',
+                'subscriptions.started_at',
+                'subscriptions.ends_at',
+                'plans.name as plan_name',
+                'plans.max_profiles',
+                'plans.max_users',
+                'plans.monthly_credits',
+                'plans.max_history_days',
+                'plans.scan_frequency_minutes',
+                'plans.priority_level',
+            ])
+            ->first();
+
+        $this->creditWallet = DB::table('credit_wallets')
+            ->where('user_id', $this->userId)
+            ->first();
+
+        $this->creditTransactions = DB::table('credit_transactions')
+            ->where('user_id', $this->userId)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get();
     }
 
     private function loadTrackedProfilesForUser(): Collection

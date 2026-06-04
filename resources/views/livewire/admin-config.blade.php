@@ -31,6 +31,14 @@
                 <button
                     type="button"
                     class="whitespace-nowrap border-b-2 px-1 pb-4 text-sm font-medium"
+                    :class="{ 'border-blue-500 text-blue-600': activeTab === 'billing', 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700': activeTab !== 'billing' }"
+                    @click="activeTab = 'billing'"
+                >
+                    Pakete & Credits
+                </button>
+                <button
+                    type="button"
+                    class="whitespace-nowrap border-b-2 px-1 pb-4 text-sm font-medium"
                     :class="{ 'border-blue-500 text-blue-600': activeTab === 'scraperApi', 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700': activeTab !== 'scraperApi' }"
                     @click="activeTab = 'scraperApi'"
                 >
@@ -80,6 +88,15 @@
                     </p>
                     <button type="button" @click="activeTab = 'scraper'" class="mt-3 text-sm font-medium text-blue-600">
                         Scraper-Einstellungen oeffnen
+                    </button>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <h3 class="text-lg font-semibold text-gray-700">Pakete & Credits</h3>
+                    <p class="mt-2 text-sm text-gray-600">
+                        SaaS-Pakete, monatliche Credits, Zusatzpakete und Verbrauchswerte konfigurieren.
+                    </p>
+                    <button type="button" @click="activeTab = 'billing'" class="mt-3 text-sm font-medium text-blue-600">
+                        Paket-Einstellungen oeffnen
                     </button>
                 </div>
                 <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -170,6 +187,11 @@
                     </button>
                 </x-slot>
             </x-settings-collapse>
+        </div>
+
+        <div x-show="activeTab === 'billing'" x-cloak class="space-y-6" x-collapse.duration.300ms>
+            <h2 class="text-2xl font-semibold">Pakete & Credits</h2>
+            @livewire('admin.config.billing-settings')
         </div>
 
         <div x-show="activeTab === 'scraperApi'" x-cloak class="space-y-6" x-collapse.duration.300ms>

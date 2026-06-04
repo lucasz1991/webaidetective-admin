@@ -205,8 +205,147 @@
 
         <div x-show="selectedTab === 'usageCosts'" x-collapse x-cloak>
             <div class="mt-4 w-full rounded-lg bg-gray-100 p-6 shadow">
-                <h2 class="text-2xl font-bold text-gray-800">Kosten / Verbrauch</h2>
-                <p class="mt-4 text-sm text-gray-500">Dieser Bereich ist vorbereitet und bleibt vorerst leer.</p>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h2 class="text-2xl font-bold text-gray-800">Kosten / Verbrauch</h2>
+                    @if($activeSubscription)
+                        <span class="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">
+                            {{ $activeSubscription->plan_name ?? 'Aktives Paket' }}
+                        </span>
+                    @else
+                        <span class="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">
+                            Kein aktives Paket
+                        </span>
+                    @endif
+                </div>
+
+                @unless($billingTablesReady)
+                    <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                        Billing-Tabellen fehlen noch. Fuehre die Billing-Migration in der Base-Installation aus.
+                    </div>
+                @else
+                    <div class="mt-6 grid gap-4 lg:grid-cols-4">
+                        <div class="rounded-lg border border-gray-200 bg-white p-4">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Verfuegbar</div>
+                            <div class="mt-2 text-2xl font-bold text-gray-900">
+                                {{ number_format((int) ($creditWallet->available_credits ?? 0), 0, ',', '.') }}
+                            </div>
+                            <div class="mt-1 text-sm text-gray-500">Credits</div>
+                        </div>
+                        <div class="rounded-lg border border-gray-200 bg-white p-4">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Reserviert</div>
+                            <div class="mt-2 text-2xl font-bold text-gray-900">
+                                {{ number_format((int) ($creditWallet->reserved_credits ?? 0), 0, ',', '.') }}
+                            </div>
+                            <div class="mt-1 text-sm text-gray-500">Credits</div>
+                        </div>
+                        <div class="rounded-lg border border-gray-200 bg-white p-4">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Verbraucht</div>
+                            <div class="mt-2 text-2xl font-bold text-gray-900">
+                                {{ number_format((int) ($creditWallet->used_credits ?? 0), 0, ',', '.') }}
+                            </div>
+                            <div class="mt-1 text-sm text-gray-500">Credits</div>
+                        </div>
+                        <div class="rounded-lg border border-gray-200 bg-white p-4">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Bonus</div>
+                            <div class="mt-2 text-2xl font-bold text-gray-900">
+                                {{ number_format((int) ($creditWallet->bonus_credits ?? 0), 0, ',', '.') }}
+                            </div>
+                            <div class="mt-1 text-sm text-gray-500">Credits</div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 grid gap-6 xl:grid-cols-2">
+                        <div class="rounded-lg border border-gray-200 bg-white p-5">
+                            <h3 class="text-lg font-semibold text-gray-800">Aktives Paket</h3>
+
+                            @if($activeSubscription)
+                                <div class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                                    <div>
+                                        <span class="text-gray-500">Paket</span>
+                                        <p class="font-semibold text-gray-900">{{ $activeSubscription->plan_name }}</p>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Status</span>
+                                        <p class="font-semibold text-gray-900">{{ $activeSubscription->status }}</p>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Monatliche Credits</span>
+                                        <p class="font-semibold text-gray-900">{{ number_format((int) $activeSubscription->monthly_credits, 0, ',', '.') }}</p>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Max Profile</span>
+                                        <p class="font-semibold text-gray-900">{{ number_format((int) $activeSubscription->max_profiles, 0, ',', '.') }}</p>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Historie</span>
+                                        <p class="font-semibold text-gray-900">{{ (int) $activeSubscription->max_history_days }} Tage</p>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Scanfrequenz</span>
+                                        <p class="font-semibold text-gray-900">{{ (int) $activeSubscription->scan_frequency_minutes }} Minuten</p>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Start</span>
+                                        <p class="font-semibold text-gray-900">
+                                            {{ $activeSubscription->started_at ? \Carbon\Carbon::parse($activeSubscription->started_at)->format('d.m.Y H:i') : '-' }}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Ende</span>
+                                        <p class="font-semibold text-gray-900">
+                                            {{ $activeSubscription->ends_at ? \Carbon\Carbon::parse($activeSubscription->ends_at)->format('d.m.Y H:i') : '-' }}
+                                        </p>
+                                    </div>
+                                </div>
+                            @else
+                                <p class="mt-4 text-sm text-gray-500">Fuer diesen Benutzer ist noch kein aktives Paket hinterlegt.</p>
+                            @endif
+                        </div>
+
+                        <div class="rounded-lg border border-gray-200 bg-white p-5">
+                            <h3 class="text-lg font-semibold text-gray-800">Wallet</h3>
+                            <div class="mt-4 text-sm text-gray-600">
+                                <p><strong>Letzter Reset:</strong> {{ $creditWallet?->last_reset_at ? \Carbon\Carbon::parse($creditWallet->last_reset_at)->format('d.m.Y H:i') : '-' }}</p>
+                                <p class="mt-2"><strong>Saldo inkl. reserviert:</strong> {{ number_format((int) ($creditWallet->available_credits ?? 0) + (int) ($creditWallet->reserved_credits ?? 0), 0, ',', '.') }} Credits</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 rounded-lg border border-gray-200 bg-white p-5">
+                        <h3 class="text-lg font-semibold text-gray-800">Letzte Credit-Transaktionen</h3>
+
+                        <div class="mt-4 overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    <tr>
+                                        <th class="px-3 py-2">Datum</th>
+                                        <th class="px-3 py-2">Typ</th>
+                                        <th class="px-3 py-2">Beschreibung</th>
+                                        <th class="px-3 py-2 text-right">Credits</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    @forelse($creditTransactions as $transaction)
+                                        <tr>
+                                            <td class="whitespace-nowrap px-3 py-2 text-gray-600">
+                                                {{ $transaction->created_at ? \Carbon\Carbon::parse($transaction->created_at)->format('d.m.Y H:i') : '-' }}
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-2 font-semibold text-gray-800">{{ $transaction->type }}</td>
+                                            <td class="px-3 py-2 text-gray-600">{{ $transaction->description ?: '-' }}</td>
+                                            <td class="whitespace-nowrap px-3 py-2 text-right font-semibold {{ (int) $transaction->amount < 0 ? 'text-red-600' : 'text-emerald-700' }}">
+                                                {{ number_format((int) $transaction->amount, 0, ',', '.') }}
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="4" class="px-3 py-6 text-center text-gray-500">Noch keine Credit-Transaktionen vorhanden.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @endunless
             </div>
         </div>
     </div>
