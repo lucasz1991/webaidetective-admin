@@ -2,43 +2,43 @@
     <div>
         <h1 class="text-2xl font-semibold text-gray-900">Profile</h1>
         <p class="mt-2 text-sm text-gray-500">
-            Hier werden die getrackten Instagram-Profile aus dem Monitoring angezeigt, nicht die Scraper-Accounts aus den Einstellungen.
+            Hier werden alle gespeicherten Instagram-Profile aus dem System angezeigt, inklusive ihrer Verknuepfungen zu Personen und Benutzern.
         </p>
     </div>
 
     @if (! $tablesAvailable)
         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            Die Tracking-Tabellen `tracked_people` oder `instagram_profiles` sind in dieser Installation aktuell nicht verfuegbar.
+            Die Tabelle `instagram_profiles` ist in dieser Installation aktuell nicht verfuegbar.
         </div>
     @else
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex flex-wrap items-center gap-4">
-                <div class="relative">
-                    <input
-                        type="text"
-                        wire:model.live.debounce.400ms="search"
-                        placeholder="Name, Alias, @username oder Benutzer suchen..."
-                        class="w-80 rounded-full border border-gray-300 px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    >
-                </div>
+                <input
+                    type="text"
+                    wire:model.live.debounce.400ms="search"
+                    placeholder="Name, @username oder Biografie suchen..."
+                    class="w-80 rounded-full border border-gray-300 px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
 
-                <select wire:model.live="filterByUser" class="rounded border border-gray-300 px-3 py-2 text-sm">
-                    <option value="">Alle Benutzer</option>
-                    @foreach($users as $user)
-                        <option value="{{ $user->id }}">{{ $user->name }}</option>
-                    @endforeach
-                </select>
+                @if($hasUserRelations)
+                    <select wire:model.live="filterByUser" class="rounded border border-gray-300 px-3 py-2 text-sm">
+                        <option value="">Alle Benutzer</option>
+                        @foreach($users as $user)
+                            <option value="{{ $user->id }}">{{ $user->name }}</option>
+                        @endforeach
+                    </select>
+                @endif
             </div>
 
             <div class="rounded-lg border border-blue-100 bg-blue-50 px-4 py-2 text-sm text-blue-900">
-                {{ $profiles->total() }} getrackte {{ $profiles->total() === 1 ? 'Profil' : 'Profile' }}
+                {{ $profiles->total() }} gespeicherte {{ $profiles->total() === 1 ? 'Profil' : 'Profile' }}
             </div>
         </div>
 
         <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
             <div class="hidden grid-cols-12 gap-4 border-b border-gray-200 bg-gray-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 lg:grid">
                 <div class="col-span-4">
-                    <button wire:click="sortByField('tracked_people.instagram_username')" class="flex items-center gap-2 text-left">
+                    <button wire:click="sortByField('instagram_profiles.username')" class="flex items-center gap-2 text-left">
                         Profil
                     </button>
                 </div>
@@ -47,18 +47,16 @@
                         Reichweite
                     </button>
                 </div>
-                <div class="col-span-2">
-                    <button wire:click="sortByField('users.name')" class="flex items-center gap-2 text-left">
-                        Benutzer
+                <div class="col-span-3">
+                    Verknuepfungen
+                </div>
+                <div class="col-span-1">
+                    <button wire:click="sortByField('instagram_profiles.last_scanned_at')" class="flex items-center gap-2 text-left">
+                        Scan
                     </button>
                 </div>
                 <div class="col-span-2">
-                    <button wire:click="sortByField('tracked_people.last_instagram_analyzed_at')" class="flex items-center gap-2 text-left">
-                        Letzte Analyse
-                    </button>
-                </div>
-                <div class="col-span-2">
-                    <button wire:click="sortByField('tracked_people.updated_at')" class="flex items-center gap-2 text-left">
+                    <button wire:click="sortByField('instagram_profiles.updated_at')" class="flex items-center gap-2 text-left">
                         Aktualisiert
                     </button>
                 </div>
@@ -67,11 +65,10 @@
             <div class="divide-y divide-gray-200">
                 @forelse ($profiles as $profile)
                     @php
-                        $displayName = trim(collect([$profile->first_name, $profile->last_name])->filter()->implode(' '));
-                        $handle = $profile->profile_username ?: $profile->instagram_username;
-                        $imageUrl = $profile->profile_image_path
-                            ? \Illuminate\Support\Facades\Storage::disk('public')->url($profile->profile_image_path)
-                            : $profile->profile_image_url;
+                        $handle = $profile->username ? '@'.ltrim($profile->username, '@') : 'Kein Instagram-Handle';
+                        $displayName = $profile->display_name ?: $profile->full_name ?: $handle;
+                        $imageUrl = \App\Support\PublicAssetUrl::fromStorageOrRemote($profile->profile_image_path, $profile->profile_image_url);
+                        $visibility = $profile->profile_visibility ?: ($profile->is_private ? 'private' : 'unknown');
                     @endphp
 
                     <div class="grid gap-4 px-5 py-4 text-sm lg:grid-cols-12">
@@ -81,7 +78,7 @@
                                     <img src="{{ $imageUrl }}" alt="{{ $handle }}" class="h-full w-full object-cover">
                                 @else
                                     <div class="flex h-full w-full items-center justify-center text-xs font-semibold text-gray-500">
-                                        {{ strtoupper(substr((string) ($handle ?: $displayName ?: '?'), 0, 1)) }}
+                                        {{ strtoupper(substr(ltrim((string) ($profile->username ?: $displayName ?: '?'), '@'), 0, 1)) }}
                                     </div>
                                 @endif
                             </div>
@@ -89,30 +86,26 @@
                             <div class="min-w-0">
                                 <div class="flex flex-wrap items-center gap-2">
                                     <p class="truncate font-semibold text-gray-900">
-                                        {{ $profile->profile_display_name ?: $profile->profile_full_name ?: $displayName ?: 'Unbenanntes Profil' }}
+                                        {{ $displayName }}
                                     </p>
 
-                                    @if($profile->is_primary)
-                                        <span class="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">Primaer</span>
-                                    @endif
-
-                                    @if($profile->monitoring_enabled)
-                                        <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Monitoring aktiv</span>
-                                    @else
-                                        <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">Monitoring aus</span>
-                                    @endif
+                                    <span class="rounded-full px-2 py-0.5 text-xs font-semibold
+                                        @if($visibility === 'public') bg-emerald-100 text-emerald-700
+                                        @elseif($visibility === 'private') bg-amber-100 text-amber-800
+                                        @else bg-gray-100 text-gray-600 @endif">
+                                        {{ $visibility }}
+                                    </span>
                                 </div>
 
-                                <p class="mt-1 truncate text-xs text-gray-500">
-                                    {{ $handle ? '@'.ltrim($handle, '@') : 'Kein Instagram-Handle' }}
-                                    @if($profile->alias)
-                                        · Alias: {{ $profile->alias }}
-                                    @endif
-                                </p>
+                                <p class="mt-1 truncate text-xs text-gray-500">{{ $handle }}</p>
 
-                                @if($profile->last_instagram_status_message)
+                                @if($profile->last_status_message)
                                     <p class="mt-2 line-clamp-2 text-xs text-gray-500">
-                                        {{ $profile->last_instagram_status_message }}
+                                        {{ $profile->last_status_message }}
+                                    </p>
+                                @elseif($profile->biography)
+                                    <p class="mt-2 line-clamp-2 text-xs text-gray-500">
+                                        {{ $profile->biography }}
                                     </p>
                                 @endif
                             </div>
@@ -133,23 +126,48 @@
                             </div>
                         </div>
 
-                        <div class="lg:col-span-2">
-                            @if($profile->user_id)
-                                <a href="{{ route('admin.user-profile', ['userId' => $profile->user_id]) }}" wire:navigate class="font-medium text-blue-600 hover:underline">
-                                    {{ $profile->user_name ?: 'Benutzer #'.$profile->user_id }}
-                                </a>
+                        <div class="lg:col-span-3">
+                            @if(($profile->linked_people_count ?? 0) > 0)
+                                <p class="font-medium text-gray-900">
+                                    {{ $profile->linked_people_count }} {{ $profile->linked_people_count === 1 ? 'Person verknuepft' : 'Personen verknuepft' }}
+                                </p>
+
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    @foreach($profile->linked_people as $linkedPerson)
+                                        <a
+                                            href="{{ $linkedPerson->user_id ? route('admin.user-profile', ['userId' => $linkedPerson->user_id]) : '#' }}"
+                                            @class([
+                                                'rounded-full border px-2.5 py-1 text-xs font-medium',
+                                                'border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100' => $linkedPerson->user_id,
+                                                'border-gray-200 bg-gray-50 text-gray-700' => ! $linkedPerson->user_id,
+                                            ])
+                                            @if($linkedPerson->user_id) wire:navigate @endif
+                                        >
+                                            {{ $linkedPerson->display_name }}
+                                            @if($linkedPerson->relation_label)
+                                                · {{ $linkedPerson->relation_label }}
+                                            @endif
+                                        </a>
+                                    @endforeach
+                                </div>
+
+                                @if($profile->linked_users->isNotEmpty())
+                                    <p class="mt-2 text-xs text-gray-500">
+                                        Benutzer: {{ $profile->linked_users->implode(', ') }}
+                                    </p>
+                                @endif
                             @else
-                                <span class="text-gray-400">Kein Benutzer</span>
+                                <span class="text-gray-400">Noch keiner Person zugeordnet</span>
                             @endif
                         </div>
 
-                        <div class="lg:col-span-2">
+                        <div class="lg:col-span-1">
                             <p class="text-gray-900">
-                                {{ $profile->last_instagram_analyzed_at ? \Carbon\Carbon::parse($profile->last_instagram_analyzed_at)->format('d.m.Y H:i') : 'Noch nie' }}
+                                {{ $profile->last_scanned_at ? \Carbon\Carbon::parse($profile->last_scanned_at)->format('d.m.Y') : 'Nie' }}
                             </p>
                             @if($profile->last_scanned_at)
                                 <p class="mt-1 text-xs text-gray-500">
-                                    Profilscan: {{ \Carbon\Carbon::parse($profile->last_scanned_at)->format('d.m.Y H:i') }}
+                                    {{ \Carbon\Carbon::parse($profile->last_scanned_at)->format('H:i') }}
                                 </p>
                             @endif
                         </div>
@@ -165,7 +183,7 @@
                     </div>
                 @empty
                     <div class="p-8 text-center text-sm text-gray-500">
-                        Keine getrackten Instagram-Profile gefunden.
+                        Keine gespeicherten Instagram-Profile gefunden.
                     </div>
                 @endforelse
             </div>
@@ -174,5 +192,7 @@
         <div>
             {{ $profiles->links() }}
         </div>
+
+        <livewire:admin.network-map />
     @endif
 </div>

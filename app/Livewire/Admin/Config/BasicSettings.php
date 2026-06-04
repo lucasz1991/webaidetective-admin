@@ -10,7 +10,7 @@ class BasicSettings extends Component
 {
     use WithFileUploads;
 
-    public $companyName, $shopName, $currency, $timezone, $contactEmail, $vatRate, $maintenanceMode;
+    public $companyName, $shopName, $currency, $timezone, $contactEmail, $vatRate, $maintenanceMode, $baseUrl;
     public $favicon, $logoSquare, $logoHorizontal, $logoVertical;
     public $faviconPreview, $logoSquarePreview, $logoHorizontalPreview, $logoVerticalPreview;
     
@@ -23,6 +23,7 @@ class BasicSettings extends Component
         $this->currency = Setting::getValue('base', 'currency');
         $this->timezone = Setting::getValue('base', 'timezone');
         $this->contactEmail = Setting::getValue('base', 'contact_email');
+        $this->baseUrl = Setting::getValue('base', 'base_url') ?? Setting::getValue('base', 'app_url');
         $this->vatRate = Setting::getValue('base', 'vat_rate');
         $this->maintenanceMode = Setting::getValue('base', 'maintenance_mode');
 
@@ -46,6 +47,7 @@ class BasicSettings extends Component
             'companyName' => 'nullable|string|max:255',
             'shopName' => 'nullable|string|max:255',
             'contactEmail' => 'nullable|email',
+            'baseUrl' => 'nullable|url',
             'vatRate' => 'nullable|numeric|min:0|max:100',
             'primaryColor' => 'nullable',
             'secondaryColor' => 'nullable',
@@ -64,6 +66,8 @@ class BasicSettings extends Component
         Setting::setValue('base', 'currency', $this->currency);
         Setting::setValue('base', 'timezone', $this->timezone);
         Setting::setValue('base', 'contact_email', $this->contactEmail);
+        Setting::setValue('base', 'base_url', $this->baseUrl);
+        Setting::setValue('base', 'app_url', $this->baseUrl);
         Setting::setValue('base', 'vat_rate', $this->vatRate);
         Setting::setValue('base', 'maintenance_mode', $this->maintenanceMode);
 

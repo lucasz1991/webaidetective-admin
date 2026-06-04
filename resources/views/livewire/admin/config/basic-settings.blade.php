@@ -50,6 +50,12 @@
                     </div>
 
                     <div>
+                        <label class="block text-sm font-medium text-gray-700">Base URL</label>
+                        <input type="url" wire:model.live="baseUrl" @change="changed = true" placeholder="https://deine-domain.de" class="border rounded px-4 py-2 w-full">
+                        @error('baseUrl') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
                         <label class="block text-sm font-medium text-gray-700">Währung</label>
                         <select wire:model.live="currency" @change="changed = true" class="border bg-white rounded px-4 py-2 w-full">
                             <option value="EUR">Euro (€)</option>
