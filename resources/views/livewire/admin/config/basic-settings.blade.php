@@ -50,12 +50,6 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Base URL</label>
-                        <input type="url" wire:model.live="baseUrl" @change="changed = true" placeholder="https://deine-domain.de" class="border rounded px-4 py-2 w-full">
-                        @error('baseUrl') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                    </div>
-
-                    <div>
                         <label class="block text-sm font-medium text-gray-700">Währung</label>
                         <select wire:model.live="currency" @change="changed = true" class="border bg-white rounded px-4 py-2 w-full">
                             <option value="EUR">Euro (€)</option>
@@ -79,6 +73,29 @@
                         <label class="block text-sm font-medium text-gray-700">Mehrwertsteuer (%)</label>
                         <input type="number" wire:model.live="vatRate" @change="changed = true" class="border rounded px-4 py-2 w-full" min="0" max="100">
                         @error('vatRate') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+            </x-slot>
+        </x-settings-collapse>
+        <x-settings-collapse>
+            <x-slot name="trigger">
+                Base URL
+            </x-slot>
+            <x-slot name="content">
+                <div class="grid grid-cols-1 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Base URL fuer Admin-Dateien</label>
+                        <input
+                            type="url"
+                            wire:model.live="baseUrl"
+                            @change="changed = true"
+                            placeholder="https://deine-domain.de"
+                            class="border rounded px-4 py-2 w-full"
+                        >
+                        <p class="mt-2 text-xs text-gray-500">
+                            Diese URL wird im Admin genutzt, um gespeicherte Dateien wie Bilder ueber den richtigen Host zu laden.
+                        </p>
+                        @error('baseUrl') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                     </div>
                 </div>
             </x-slot>
