@@ -134,20 +134,25 @@
 
                                 <div class="mt-2 flex flex-wrap gap-2">
                                     @foreach($profile->linked_people as $linkedPerson)
-                                        <a
-                                            href="{{ $linkedPerson->user_id ? route('admin.user-profile', ['userId' => $linkedPerson->user_id]) : '#' }}"
-                                            @class([
-                                                'rounded-full border px-2.5 py-1 text-xs font-medium',
-                                                'border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100' => $linkedPerson->user_id,
-                                                'border-gray-200 bg-gray-50 text-gray-700' => ! $linkedPerson->user_id,
-                                            ])
-                                            @if($linkedPerson->user_id) wire:navigate @endif
-                                        >
-                                            {{ $linkedPerson->display_name }}
-                                            @if($linkedPerson->relation_label)
-                                                · {{ $linkedPerson->relation_label }}
-                                            @endif
-                                        </a>
+                                        @if($linkedPerson->user_id)
+                                            <a
+                                                href="{{ route('admin.user-profile', ['userId' => $linkedPerson->user_id]) }}"
+                                                wire:navigate
+                                                class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 hover:bg-blue-100"
+                                            >
+                                                {{ $linkedPerson->display_name }}
+                                                @if($linkedPerson->relation_label)
+                                                    · {{ $linkedPerson->relation_label }}
+                                                @endif
+                                            </a>
+                                        @else
+                                            <span class="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                                {{ $linkedPerson->display_name }}
+                                                @if($linkedPerson->relation_label)
+                                                    · {{ $linkedPerson->relation_label }}
+                                                @endif
+                                            </span>
+                                        @endif
                                     @endforeach
                                 </div>
 

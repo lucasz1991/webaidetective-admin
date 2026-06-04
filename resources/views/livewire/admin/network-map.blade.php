@@ -102,14 +102,8 @@
                     <section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                             <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
-                                <button type="button" data-network-filter="public" data-active-classes="border-sky-300 bg-sky-50 text-sky-800" data-inactive-classes="border-slate-200 bg-white text-slate-500" class="rounded-lg border px-3 py-1.5 transition" aria-pressed="true">
-                                    Bekannte Profile
-                                </button>
-                                <button type="button" data-network-filter="inferred" data-active-classes="border-pink-300 bg-pink-50 text-pink-800" data-inactive-classes="border-slate-200 bg-white text-slate-500" class="rounded-lg border px-3 py-1.5 transition" aria-pressed="true">
-                                    Rekonstruktionen
-                                </button>
                                 <button type="button" data-network-filter="tracked" data-active-classes="border-emerald-300 bg-emerald-50 text-emerald-800" data-inactive-classes="border-slate-200 bg-white text-slate-500" class="rounded-lg border px-3 py-1.5 transition" aria-pressed="true">
-                                    Listen/Profile
+                                    System-Beziehungen
                                 </button>
                                 <label class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-600">
                                     <span>Min. Verbindungen</span>
