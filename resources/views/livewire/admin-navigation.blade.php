@@ -62,6 +62,11 @@
                         <span>Mails</span>
                     </a>
                 </li>
+                <li>
+                    <a href="{{ route('admin.scraper-profiles') }}" wire:navigate class="{{ request()->routeIs('admin.scraper-profiles') ? 'text-blue-600' : 'text-[#333]' }} text-sm flex items-center hover:text-blue-600 transition-all">
+                        <span>Gespeicherte Profile</span>
+                    </a>
+                </li>
                 <!-- Benutzer -->
                 <li>
                     <a href="{{ route('admin.users') }}" wire:navigate  class="{{ request()->routeIs('admin.users') ? 'text-blue-600' : 'text-[#333]' }} text-sm flex items-center hover:text-blue-600 transition-all">
