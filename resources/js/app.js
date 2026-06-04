@@ -4,7 +4,7 @@ import mask from '@alpinejs/mask';
 import resize from '@alpinejs/resize';
 import intersect from '@alpinejs/intersect';
 import sort from '@alpinejs/sort';
-import '../../../webaidetective-base/resources/js/network-map';
+import './network-map';
 
 Alpine.plugin(collapse);
 Alpine.plugin(mask);
