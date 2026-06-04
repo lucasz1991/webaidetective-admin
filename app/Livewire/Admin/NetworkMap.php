@@ -29,6 +29,7 @@ class NetworkMap extends Component
         $hasProfilesTable = Schema::hasTable('instagram_profiles');
         $hasRelationshipsTable = Schema::hasTable('instagram_profile_relationships');
         $hasTrackedPeopleTable = Schema::hasTable('tracked_people');
+        $hasCurrentInstagramProfileColumn = $hasTrackedPeopleTable && Schema::hasColumn('tracked_people', 'current_instagram_profile_id');
 
         $tablesAvailable = $hasProfilesTable && $hasRelationshipsTable;
         $graph = ['nodes' => [], 'edges' => []];
@@ -40,7 +41,7 @@ class NetworkMap extends Component
         ];
 
         if ($tablesAvailable) {
-            [$graph, $stats] = $this->buildGraph($hasTrackedPeopleTable);
+            [$graph, $stats] = $this->buildGraph($hasTrackedPeopleTable, $hasCurrentInstagramProfileColumn);
         }
 
         return view('livewire.admin.network-map', [
@@ -179,7 +180,7 @@ class NetworkMap extends Component
         $this->profilePreview = [];
     }
 
-    private function buildGraph(bool $hasTrackedPeopleTable): array
+    private function buildGraph(bool $hasTrackedPeopleTable, bool $hasCurrentInstagramProfileColumn): array
     {
         $profiles = DB::table('instagram_profiles')
             ->whereNull('deleted_at')
@@ -216,21 +217,21 @@ class NetworkMap extends Component
         $trackedPeople = $hasTrackedPeopleTable
             ? DB::table('tracked_people')
                 ->leftJoin('users', 'users.id', '=', 'tracked_people.user_id')
-                ->get([
+                ->get(array_filter([
                     'tracked_people.id',
                     'tracked_people.user_id',
                     'tracked_people.first_name',
                     'tracked_people.last_name',
                     'tracked_people.alias',
                     'tracked_people.instagram_username',
-                    'tracked_people.current_instagram_profile_id',
+                    $hasCurrentInstagramProfileColumn ? 'tracked_people.current_instagram_profile_id' : null,
                     'tracked_people.monitoring_enabled',
                     'tracked_people.is_primary',
                     'tracked_people.instagram_profile_image_path',
                     'tracked_people.last_instagram_status_level',
                     'tracked_people.last_instagram_status_message',
                     'users.name as user_name',
-                ])
+                ]))
             : collect();
 
         $profileNodeIds = [];
@@ -288,7 +289,9 @@ class NetworkMap extends Component
                 'detailUrl' => $person->user_id ? route('admin.user-profile', ['userId' => $person->user_id]) : null,
             ];
 
-            $profileId = $person->current_instagram_profile_id ?: ($username !== '' ? ($profileIdsByUsername[$username] ?? null) : null);
+            $profileId = $hasCurrentInstagramProfileColumn
+                ? ($person->current_instagram_profile_id ?: ($username !== '' ? ($profileIdsByUsername[$username] ?? null) : null))
+                : ($username !== '' ? ($profileIdsByUsername[$username] ?? null) : null);
 
             if ($profileId && isset($profileNodeIds[(int) $profileId])) {
                 $this->mergeEdge(
@@ -360,7 +363,7 @@ class NetworkMap extends Component
     {
         $rows = collect();
 
-        if (Schema::hasTable('tracked_people')) {
+        if (Schema::hasTable('tracked_people') && Schema::hasColumn('tracked_people', 'current_instagram_profile_id')) {
             $rows = $rows->concat(
                 DB::table('tracked_people')
                     ->leftJoin('users', 'users.id', '=', 'tracked_people.user_id')

@@ -69,9 +69,10 @@ class Profiles extends Component
         $hasTrackedPeopleTable = Schema::hasTable('tracked_people');
         $hasUsersTable = Schema::hasTable('users');
         $hasProfileLinksTable = Schema::hasTable('tracked_person_instagram_profile_links');
+        $hasCurrentInstagramProfileColumn = $hasTrackedPeopleTable && Schema::hasColumn('tracked_people', 'current_instagram_profile_id');
 
         $profiles = $hasProfilesTable
-            ? $this->loadProfiles($hasTrackedPeopleTable, $hasProfileLinksTable)
+            ? $this->loadProfiles($hasCurrentInstagramProfileColumn, $hasProfileLinksTable)
             : collect();
         $users = $hasUsersTable ? User::query()->orderBy('name')->get(['id', 'name']) : collect();
 
@@ -79,11 +80,11 @@ class Profiles extends Component
             'profiles' => $profiles,
             'users' => $users,
             'tablesAvailable' => $hasProfilesTable,
-            'hasUserRelations' => $hasUsersTable && ($hasTrackedPeopleTable || $hasProfileLinksTable),
+            'hasUserRelations' => $hasUsersTable && ($hasCurrentInstagramProfileColumn || $hasProfileLinksTable),
         ])->layout('layouts.master');
     }
 
-    private function loadProfiles(bool $hasTrackedPeopleTable, bool $hasProfileLinksTable): LengthAwarePaginator
+    private function loadProfiles(bool $hasCurrentInstagramProfileColumn, bool $hasProfileLinksTable): LengthAwarePaginator
     {
         $query = DB::table('instagram_profiles')
             ->whereNull('instagram_profiles.deleted_at')
@@ -119,12 +120,12 @@ class Profiles extends Component
                 });
             })
             ->when(
-                $this->filterByUser !== '' && ($hasTrackedPeopleTable || $hasProfileLinksTable),
-                function ($builder) use ($hasTrackedPeopleTable, $hasProfileLinksTable): void {
+                $this->filterByUser !== '' && ($hasCurrentInstagramProfileColumn || $hasProfileLinksTable),
+                function ($builder) use ($hasCurrentInstagramProfileColumn, $hasProfileLinksTable): void {
                     $userId = (int) $this->filterByUser;
 
-                    $builder->where(function ($query) use ($userId, $hasTrackedPeopleTable, $hasProfileLinksTable): void {
-                        if ($hasTrackedPeopleTable) {
+                    $builder->where(function ($query) use ($userId, $hasCurrentInstagramProfileColumn, $hasProfileLinksTable): void {
+                        if ($hasCurrentInstagramProfileColumn) {
                             $query->whereExists(function ($subQuery) use ($userId): void {
                                 $subQuery
                                     ->selectRaw('1')
@@ -135,7 +136,7 @@ class Profiles extends Component
                         }
 
                         if ($hasProfileLinksTable) {
-                            $method = $hasTrackedPeopleTable ? 'orWhereExists' : 'whereExists';
+                            $method = $hasCurrentInstagramProfileColumn ? 'orWhereExists' : 'whereExists';
 
                             $query->{$method}(function ($subQuery) use ($userId): void {
                                 $subQuery
@@ -153,7 +154,7 @@ class Profiles extends Component
 
         $profiles = $query->paginate(15);
         $profileIds = collect($profiles->items())->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $relationsByProfile = $this->loadRelationsByProfile($profileIds, $hasTrackedPeopleTable, $hasProfileLinksTable);
+        $relationsByProfile = $this->loadRelationsByProfile($profileIds, $hasCurrentInstagramProfileColumn, $hasProfileLinksTable);
 
         $profiles->setCollection(
             $profiles->getCollection()->map(function ($profile) use ($relationsByProfile) {
@@ -173,7 +174,7 @@ class Profiles extends Component
         return $profiles;
     }
 
-    private function loadRelationsByProfile(array $profileIds, bool $hasTrackedPeopleTable, bool $hasProfileLinksTable): Collection
+    private function loadRelationsByProfile(array $profileIds, bool $hasCurrentInstagramProfileColumn, bool $hasProfileLinksTable): Collection
     {
         if ($profileIds === []) {
             return collect();
@@ -181,7 +182,7 @@ class Profiles extends Component
 
         $rows = collect();
 
-        if ($hasTrackedPeopleTable) {
+        if ($hasCurrentInstagramProfileColumn) {
             $rows = $rows->concat(
                 DB::table('tracked_people')
                     ->leftJoin('users', 'users.id', '=', 'tracked_people.user_id')
