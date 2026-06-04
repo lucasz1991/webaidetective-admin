@@ -69,7 +69,23 @@ class PublicAssetUrl
     {
         $url = trim((string) $url);
 
-        return $url !== '' ? $url : null;
+        if ($url === '') {
+            return null;
+        }
+
+        if (self::isAbsoluteUrl($url)) {
+            return $url;
+        }
+
+        if (str_starts_with($url, '/')) {
+            return self::baseUrl().$url;
+        }
+
+        if (str_starts_with($url, 'storage/')) {
+            return self::baseUrl().'/'.$url;
+        }
+
+        return self::baseUrl().'/'.ltrim($url, '/');
     }
 
     private static function isAbsoluteUrl(string $value): bool

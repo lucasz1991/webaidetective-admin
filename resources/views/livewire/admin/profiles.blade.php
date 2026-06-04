@@ -85,9 +85,13 @@
 
                             <div class="min-w-0">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <p class="truncate font-semibold text-gray-900">
+                                    <a
+                                        href="{{ route('admin.profile-detail', ['profileId' => $profile->id]) }}"
+                                        wire:navigate
+                                        class="truncate font-semibold text-gray-900 hover:text-blue-600 hover:underline"
+                                    >
                                         {{ $displayName }}
-                                    </p>
+                                    </a>
 
                                     <span class="rounded-full px-2 py-0.5 text-xs font-semibold
                                         @if($visibility === 'public') bg-emerald-100 text-emerald-700
@@ -98,6 +102,11 @@
                                 </div>
 
                                 <p class="mt-1 truncate text-xs text-gray-500">{{ $handle }}</p>
+                                <p class="mt-1">
+                                    <a href="{{ route('admin.profile-detail', ['profileId' => $profile->id]) }}" wire:navigate class="text-xs font-medium text-blue-600 hover:underline">
+                                        Profil-Details ansehen
+                                    </a>
+                                </p>
 
                                 @if($profile->last_status_message)
                                     <p class="mt-2 line-clamp-2 text-xs text-gray-500">
