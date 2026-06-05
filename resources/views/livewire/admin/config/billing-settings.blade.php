@@ -81,6 +81,22 @@
 
             <div class="mt-5 grid gap-4 sm:grid-cols-2">
                 <div>
+                    <label class="block text-sm font-medium text-gray-700">Scan-Basispreis</label>
+                    <input type="number" min="0" wire:model.defer="creditCosts.scan_base_credit" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Credits pro Minute</label>
+                    <input type="number" min="0" wire:model.defer="creditCosts.scan_credit_per_minute" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Mindest-Credits</label>
+                    <input type="number" min="0" wire:model.defer="creditCosts.scan_minimum_credits" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Max. abrechenbare Minuten</label>
+                    <input type="number" min="1" wire:model.defer="creditCosts.scan_max_billable_minutes" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                <div>
                     <label class="block text-sm font-medium text-gray-700">Basis-Profilscan</label>
                     <input type="number" min="0" wire:model.defer="creditCosts.profile_scan" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 </div>

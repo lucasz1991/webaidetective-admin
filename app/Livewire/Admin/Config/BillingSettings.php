@@ -66,6 +66,10 @@ class BillingSettings extends Component
     {
         $validated = $this->validate([
             'creditCosts.profile_scan' => ['required', 'integer', 'min:0', 'max:1000000'],
+            'creditCosts.scan_base_credit' => ['required', 'integer', 'min:0', 'max:1000000'],
+            'creditCosts.scan_credit_per_minute' => ['required', 'integer', 'min:0', 'max:1000000'],
+            'creditCosts.scan_minimum_credits' => ['required', 'integer', 'min:0', 'max:1000000'],
+            'creditCosts.scan_max_billable_minutes' => ['required', 'integer', 'min:1', 'max:10080'],
             'creditCosts.profile_image_scan' => ['required', 'integer', 'min:0', 'max:1000000'],
             'creditCosts.post_scan' => ['required', 'integer', 'min:0', 'max:1000000'],
             'creditCosts.new_posts_archive' => ['required', 'integer', 'min:0', 'max:1000000'],
@@ -138,6 +142,10 @@ class BillingSettings extends Component
     private function defaultCreditCosts(): array
     {
         return [
+            'scan_base_credit' => 1,
+            'scan_credit_per_minute' => 2,
+            'scan_minimum_credits' => 1,
+            'scan_max_billable_minutes' => 30,
             'profile_scan' => 1,
             'profile_image_scan' => 1,
             'post_scan' => 3,
