@@ -52,6 +52,14 @@
                 >
                     Scraper
                 </button>
+                <button
+                    type="button"
+                    class="whitespace-nowrap border-b-2 px-1 pb-4 text-sm font-medium"
+                    :class="{ 'border-blue-500 text-blue-600': activeTab === 'aiAssistant', 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700': activeTab !== 'aiAssistant' }"
+                    @click="activeTab = 'aiAssistant'"
+                >
+                    AI-Assistent
+                </button>
             </nav>
         </div>
 
@@ -106,6 +114,15 @@
                     </p>
                     <button type="button" @click="activeTab = 'scraperApi'" class="mt-3 text-sm font-medium text-blue-600">
                         Scraper API-Einstellungen oeffnen
+                    </button>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <h3 class="text-lg font-semibold text-gray-700">AI-Assistent</h3>
+                    <p class="mt-2 text-sm text-gray-600">
+                        Chat-Modell, Tool-Calling, API-Endpunkt und verschluesselten API-Key verwalten.
+                    </p>
+                    <button type="button" @click="activeTab = 'aiAssistant'" class="mt-3 text-sm font-medium text-blue-600">
+                        AI-Assistent oeffnen
                     </button>
                 </div>
             </div>
@@ -227,6 +244,11 @@
         <div x-show="activeTab === 'scraper'" x-cloak class="space-y-6" x-collapse.duration.300ms>
             <h2 class="text-2xl font-semibold">Scraper-Einstellungen</h2>
             @livewire('admin.config.scraper-settings')
+        </div>
+
+        <div x-show="activeTab === 'aiAssistant'" x-cloak class="space-y-6" x-collapse.duration.300ms>
+            <h2 class="text-2xl font-semibold">AI-Assistent</h2>
+            @livewire('admin.config.tools.ai-assistant-config')
         </div>
     </div>
 </div>
