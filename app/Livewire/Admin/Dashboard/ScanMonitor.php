@@ -34,9 +34,9 @@ class ScanMonitor extends Component
 
         return $running
             ->concat($recent)
-            ->unique(fn (object $scan) => $scan->is_running
-                ? 'running-'.$scan->tracked_person_id
-                : 'snapshot-'.$scan->snapshot_id)
+            ->unique(fn (object $scan) => $scan->snapshot_id
+                ? 'snapshot-'.$scan->snapshot_id
+                : 'person-'.$scan->tracked_person_id)
             ->take(12)
             ->values();
     }
@@ -57,8 +57,9 @@ class ScanMonitor extends Component
             })
             ->leftJoin('tracked_person_instagram_snapshots as snapshot', 'snapshot.id', '=', 'latest_snapshots.snapshot_id')
             ->where('tracked_people.last_instagram_status_level', 'partial')
+            ->where('snapshot.analyzed_at', '>=', now()->subMinutes(5))
             ->orderByDesc('tracked_people.updated_at')
-            ->limit(12)
+            ->limit(30)
             ->get([
                 'tracked_people.id as tracked_person_id',
                 $profileIdColumn,
@@ -78,7 +79,23 @@ class ScanMonitor extends Component
                 'users.name as user_name',
                 'snapshot.id as snapshot_id',
                 'snapshot.screenshot_path',
+                'snapshot.raw_payload',
+                'snapshot.analyzed_at as snapshot_analyzed_at',
             ])
+            ->filter(function (object $scan): bool {
+                $payload = $this->decodePayload($scan->raw_payload ?? null);
+                $phase = strtolower((string) data_get($payload, 'analysisPolicy.lastProgressPhase', ''));
+                $stage = strtolower((string) data_get($payload, 'analysisPolicy.lastProgressStage', ''));
+                $message = strtolower((string) ($scan->status_message ?? ''));
+
+                return (bool) data_get($payload, 'analysisPolicy.progressSnapshot', false)
+                    && ! in_array($phase, ['done', 'error'], true)
+                    && $stage !== 'scan-stop-requested'
+                    && ! str_contains($message, 'fehlgeschlagen')
+                    && ! str_contains($message, 'abgebrochen')
+                    && ! str_contains($message, 'beendet')
+                    && ! str_contains($message, 'abgeschlossen');
+            })
             ->map(fn (object $scan) => $this->normalizeScan($scan, true));
     }
 
@@ -107,6 +124,7 @@ class ScanMonitor extends Component
                 'snapshot.followers_count',
                 'snapshot.following_count',
                 'snapshot.posts_count',
+                'snapshot.raw_payload',
                 'tracked_people.first_name',
                 'tracked_people.last_name',
                 'tracked_people.alias',
@@ -118,10 +136,15 @@ class ScanMonitor extends Component
 
     private function normalizeScan(object $scan, bool $isRunning): object
     {
+        $payload = $this->decodePayload($scan->raw_payload ?? null);
         $name = trim(collect([$scan->first_name, $scan->last_name])->filter()->implode(' '));
         $profileImagePath = $scan->profile_image_path
             ?? $scan->instagram_profile_image_path
             ?? null;
+        $liveScreenshotUrl = trim((string) data_get($payload, 'liveScreenshotUrl', ''));
+        $scannedAt = $isRunning
+            ? ($scan->snapshot_analyzed_at ?? $scan->scanned_at)
+            : $scan->scanned_at;
 
         return (object) [
             'snapshot_id' => $scan->snapshot_id ? (int) $scan->snapshot_id : null,
@@ -133,7 +156,7 @@ class ScanMonitor extends Component
             'user_name' => $scan->user_name,
             'status_level' => $isRunning ? 'partial' : ($scan->status_level ?: 'unknown'),
             'status_message' => $scan->status_message,
-            'scanned_at' => $scan->scanned_at,
+            'scanned_at' => $scannedAt,
             'followers_count' => $scan->followers_count,
             'following_count' => $scan->following_count,
             'posts_count' => $scan->posts_count,
@@ -141,8 +164,25 @@ class ScanMonitor extends Component
                 $profileImagePath,
                 $scan->profile_image_url ?? null,
             ),
-            'screenshot_url' => PublicAssetUrl::storage($scan->screenshot_path),
+            'screenshot_url' => $liveScreenshotUrl !== ''
+                ? PublicAssetUrl::storage($liveScreenshotUrl)
+                : PublicAssetUrl::storage($scan->screenshot_path),
             'is_running' => $isRunning,
         ];
+    }
+
+    private function decodePayload(mixed $payload): array
+    {
+        if (is_array($payload)) {
+            return $payload;
+        }
+
+        if (! is_string($payload) || trim($payload) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($payload, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 }

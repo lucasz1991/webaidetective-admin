@@ -45,9 +45,7 @@ class AdminDashboard extends Component
             $statistics['monitored_people'] = Schema::hasColumn('tracked_people', 'monitoring_enabled')
                 ? DB::table('tracked_people')->where('monitoring_enabled', true)->count()
                 : 0;
-            $statistics['running_scans'] = Schema::hasColumn('tracked_people', 'last_instagram_status_level')
-                ? DB::table('tracked_people')->where('last_instagram_status_level', 'partial')->count()
-                : 0;
+            $statistics['running_scans'] = $this->runningScanCount();
         }
 
         if (Schema::hasTable('instagram_profiles')) {
@@ -71,5 +69,47 @@ class AdminDashboard extends Component
         }
 
         return $statistics;
+    }
+
+    private function runningScanCount(): int
+    {
+        if (
+            ! Schema::hasTable('tracked_person_instagram_snapshots')
+            || ! Schema::hasColumn('tracked_people', 'last_instagram_status_level')
+        ) {
+            return 0;
+        }
+
+        $latestSnapshots = DB::table('tracked_person_instagram_snapshots')
+            ->selectRaw('tracked_person_id, MAX(id) as snapshot_id')
+            ->groupBy('tracked_person_id');
+
+        return DB::table('tracked_people')
+            ->joinSub($latestSnapshots, 'latest_snapshots', function ($join): void {
+                $join->on('latest_snapshots.tracked_person_id', '=', 'tracked_people.id');
+            })
+            ->join('tracked_person_instagram_snapshots as snapshot', 'snapshot.id', '=', 'latest_snapshots.snapshot_id')
+            ->where('tracked_people.last_instagram_status_level', 'partial')
+            ->where('snapshot.analyzed_at', '>=', now()->subMinutes(5))
+            ->get([
+                'snapshot.raw_payload',
+                'tracked_people.last_instagram_status_message as status_message',
+            ])
+            ->filter(function (object $snapshot): bool {
+                $payload = json_decode((string) $snapshot->raw_payload, true);
+                $phase = strtolower((string) data_get($payload, 'analysisPolicy.lastProgressPhase', ''));
+                $stage = strtolower((string) data_get($payload, 'analysisPolicy.lastProgressStage', ''));
+                $message = strtolower((string) ($snapshot->status_message ?? ''));
+
+                return is_array($payload)
+                    && (bool) data_get($payload, 'analysisPolicy.progressSnapshot', false)
+                    && ! in_array($phase, ['done', 'error'], true)
+                    && $stage !== 'scan-stop-requested'
+                    && ! str_contains($message, 'fehlgeschlagen')
+                    && ! str_contains($message, 'abgebrochen')
+                    && ! str_contains($message, 'beendet')
+                    && ! str_contains($message, 'abgeschlossen');
+            })
+            ->count();
     }
 }
