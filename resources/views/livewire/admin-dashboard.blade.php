@@ -1,102 +1,52 @@
-<div class="" wire:loading.class="cursor-wait">
-        <div class="">
-            <div class="">
-                <!-- Content -->
-                <div class="mt-2">
-                    <!-- State cards -->
-                    <div class="grid grid-cols-1 gap-4  lg:grid-cols-2 xl:grid-cols-4 mb-4">
-                        <!-- Neue Buchungen diesen Monat -->
-                        <div class="flex items-center justify-between p-4 bg-white rounded-md border border-gray-300 shadow-md">
-                            <div>
-                                <h6 class="text-xs font-medium leading-none tracking-wider text-gray-500 uppercase mb-3">
-                                    Neue Bewertungen diesen Monat
-                                </h6>
-                                <span class="text-xl font-semibold"></span>
-                            </div>
-                            <div>
-                                <span>
-                                    <svg class="w-12 h-12 text-blue-300 " xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
-                                </span>
-                            </div>
-                        </div>
-                        <!-- Gesamte Verkäufe diesen Monat -->
-                        <div class="flex items-center justify-between p-4 bg-white rounded-md border border-gray-300 shadow-md">
-                            <div>
-                                <h6 class="text-xs font-medium leading-none tracking-wider text-gray-500 uppercase  mb-3">
-                                    Bewertungen insgesamt diesen Monat
-                                </h6>
-                                <span class="text-xl font-semibold"></span>
-                            </div>
-                            <div>
-                                <span>
-                                    <svg class="w-12 h-12 text-blue-300 " xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                                    </svg>
-                                </span>
-                            </div>
-                        </div>
-                        <!-- Gesamte Benutzer -->
-                        <div class="flex items-center justify-between p-4 bg-white   rounded-md border border-gray-300 shadow-md">
-                            <div>
-                                <h6 class="text-xs font-medium leading-none tracking-wider text-gray-500 uppercase  mb-3">
-                                    Gesamte Benutzer
-                                </h6>
-                                <span class="text-xl font-semibold">{{ $totalUsers }}</span>
-                            </div>
-                            <div>
-                                <span>
-                                    <svg class="w-12 h-12 text-blue-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                                    </svg>
-                                </span>
-                            </div>
-                        </div>
-                        <!-- Neue Produkte diesen Monat -->
-                        <div class="flex items-center justify-between p-4 bg-white   rounded-md border border-gray-300 shadow-md">
-                            <div>
-                                <h6 class="text-xs font-medium leading-none tracking-wider text-gray-500 uppercase  mb-3">
-                                    Neue Bewertungen diesen Monat
-                                </h6>
-                                <span class="text-xl font-semibold"></span>
-                            </div>
-                            <div>
-                                <span>
-                                    <svg class="w-12 h-12 text-blue-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path>
-                                    </svg>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div class="bg-white rounded-md border border-gray-300 shadow-md">
-                                <div class="relative p-4">
-                                    <p class="font-semibold text-lg">Aktive Nutzer</p>
-                                    <livewire:admin.charts.active-users  :height="250"/>
-                                </div>
-                            </div>
-                            <div class="bg-white rounded-md border border-gray-300 shadow-md">
-                                <div class="relative p-4">
-                                    <p class="font-semibold text-lg">Bewertungen</p>
-                                </div>
-                            </div>
-                            <div class="bg-white rounded-md border border-gray-300 shadow-md">
-                                <div class="relative p-4">
-                                    <p class="font-semibold text-lg">Einnahmen (€)</p>
-                                </div>
-                            </div>
-                            <div class="bg-white rounded-md border border-gray-300 shadow-md">
-                                <div class="relative p-4">
-                                    <p class="font-semibold text-lg">Partner Aktivitäten</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+<div class="space-y-6 py-6" wire:poll.30s>
+    <div class="rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-6 py-7 text-white shadow-lg">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-200">Systemuebersicht</p>
+                <h1 class="mt-2 text-3xl font-bold tracking-tight">Admin-Dashboard</h1>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                    Benutzeraktivitaet, Profilbestand und der aktuelle Zustand der Instagram-Scans auf einen Blick.
+                </p>
             </div>
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ route('admin.profiles') }}" wire:navigate class="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100">
+                    Profile anzeigen
+                </a>
+                <a href="{{ route('admin.users') }}" wire:navigate class="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10">
+                    Benutzer verwalten
+                </a>
+            </div>
+        </div>
     </div>
-</div>
 
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        @php
+            $cards = [
+                ['label' => 'Benutzer gesamt', 'value' => $statistics['users'], 'detail' => $statistics['active_users'].' in den letzten 15 Min. aktiv', 'color' => 'blue'],
+                ['label' => 'Beobachtete Personen', 'value' => $statistics['tracked_people'], 'detail' => $statistics['monitored_people'].' mit Dauerbeobachtung', 'color' => 'indigo'],
+                ['label' => 'Instagram-Profile', 'value' => $statistics['profiles'], 'detail' => 'Zentral gespeicherte Profile', 'color' => 'violet'],
+                ['label' => 'Scans heute', 'value' => $statistics['scans_today'], 'detail' => $statistics['running_scans'].' laufen gerade', 'color' => 'emerald'],
+                ['label' => 'Fehler letzte 24 Std.', 'value' => $statistics['failed_scans'], 'detail' => 'Fehlgeschlagene Profilscans', 'color' => 'rose'],
+            ];
+            $colorClasses = [
+                'blue' => 'bg-blue-50 text-blue-700 ring-blue-100',
+                'indigo' => 'bg-indigo-50 text-indigo-700 ring-indigo-100',
+                'violet' => 'bg-violet-50 text-violet-700 ring-violet-100',
+                'emerald' => 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+                'rose' => 'bg-rose-50 text-rose-700 ring-rose-100',
+            ];
+        @endphp
+
+        @foreach($cards as $card)
+            <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div class="inline-flex rounded-lg px-2.5 py-1 text-xs font-bold uppercase tracking-wide ring-1 {{ $colorClasses[$card['color']] }}">
+                    {{ $card['label'] }}
+                </div>
+                <div class="mt-4 text-3xl font-black text-slate-950">{{ number_format($card['value'], 0, ',', '.') }}</div>
+                <div class="mt-1 text-sm text-slate-500">{{ $card['detail'] }}</div>
+            </div>
+        @endforeach
+    </div>
+
+    <livewire:admin.dashboard.scan-monitor />
+</div>
