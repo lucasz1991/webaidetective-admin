@@ -26,7 +26,7 @@
             Die Scan-Tabellen sind in dieser Installation noch nicht verfuegbar.
         </div>
     @else
-        <div class="grid gap-4 p-5 xl:grid-cols-2">
+        <div class="grid gap-4 p-5 lg:grid-cols-2 xl:grid-cols-3">
             @forelse($scans as $scan)
                 @php
                     $statusClasses = match ($scan->status_level) {
