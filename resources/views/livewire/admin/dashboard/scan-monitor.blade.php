@@ -26,7 +26,7 @@
                             <span class="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-bold text-rose-700">{{ $errorCount }} fehlerhaft</span>
                         @endif
                     </div>
-                    <p class="mt-1 text-sm text-slate-500">Browser-Vorschauen und letzte Scanergebnisse. Automatische Aktualisierung alle 5 Sekunden.</p>
+                    <p class="mt-1 text-sm text-slate-500">Alle Analyse-, Listen-, Beitrags-, Vorschlags- und Verbindungsscans. Automatische Aktualisierung alle 5 Sekunden.</p>
                 </div>
             </div>
 
@@ -78,7 +78,7 @@
                 @endphp
 
                 <article
-                    wire:key="{{ $scan->is_running ? 'running' : 'snapshot' }}-{{ $scan->is_running ? $scan->tracked_person_id : $scan->snapshot_id }}"
+                    wire:key="{{ $scan->scan_key }}"
                     class="group overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg {{ $borderClass }}"
                 >
                     <div class="relative aspect-video overflow-hidden bg-gray-200">
@@ -104,20 +104,35 @@
                             </div>
                         @endif
 
-                        <div class="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
+                        <div class="absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-3">
                             <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black shadow-sm ring-1 {{ $statusClasses }}">
                                 @if($scan->is_running)
                                     <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"></span>
                                 @endif
                                 {{ $statusLabel }}
                             </span>
-                            @if($scan->screenshot_url)
-                                <span class="rounded-full bg-slate-950/75 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur">Screenshot oeffnen</span>
-                            @endif
+                            <span class="rounded-full px-3 py-1.5 text-[10px] font-black shadow-sm ring-1 {{ $scan->scan_type_classes }}">
+                                {{ $scan->scan_type_label }}
+                            </span>
                         </div>
+
+                        @if($scan->screenshot_url)
+                            <span class="absolute bottom-3 right-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur">
+                                Screenshot oeffnen
+                            </span>
+                        @endif
                     </div>
 
                     <div class="p-5">
+                        <div class="mb-3 flex flex-wrap items-center gap-2">
+                            <span class="rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 {{ $scan->scan_type_classes }}">
+                                {{ $scan->scan_type_label }}
+                            </span>
+                            @if($scan->context_label)
+                                <span class="text-[11px] font-semibold text-slate-500">{{ $scan->context_label }}</span>
+                            @endif
+                        </div>
+
                         <div class="flex items-start justify-between gap-4">
                             <div class="flex min-w-0 items-center gap-3">
                                 <div class="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
@@ -148,18 +163,16 @@
                         </div>
 
                         <div class="mt-4 grid grid-cols-3 divide-x divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white text-center">
-                            <div class="px-2 py-3">
-                                <div class="text-base font-black text-slate-950">{{ $scan->posts_count !== null ? number_format($scan->posts_count, 0, ',', '.') : '-' }}</div>
-                                <div class="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">Posts</div>
-                            </div>
-                            <div class="px-2 py-3">
-                                <div class="text-base font-black text-slate-950">{{ $scan->followers_count !== null ? number_format($scan->followers_count, 0, ',', '.') : '-' }}</div>
-                                <div class="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">Follower</div>
-                            </div>
-                            <div class="px-2 py-3">
-                                <div class="text-base font-black text-slate-950">{{ $scan->following_count !== null ? number_format($scan->following_count, 0, ',', '.') : '-' }}</div>
-                                <div class="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">Folgt</div>
-                            </div>
+                            @foreach($scan->metrics as $metric)
+                                <div class="min-w-0 px-2 py-3">
+                                    <div class="truncate text-base font-black text-slate-950">
+                                        {{ is_numeric($metric->value) ? number_format((int) $metric->value, 0, ',', '.') : ($metric->value ?: '-') }}
+                                    </div>
+                                    <div class="mt-0.5 truncate text-[10px] font-bold uppercase tracking-wide text-slate-400" title="{{ $metric->label }}">
+                                        {{ $metric->label }}
+                                    </div>
+                                </div>
+                            @endforeach
                         </div>
 
                         <footer class="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">

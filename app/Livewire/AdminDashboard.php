@@ -58,58 +58,107 @@ class AdminDashboard extends Component
             $statistics['profiles'] = $profiles->count();
         }
 
-        if (Schema::hasTable('tracked_person_instagram_snapshots')) {
-            $statistics['scans_today'] = DB::table('tracked_person_instagram_snapshots')
-                ->where('analyzed_at', '>=', now()->startOfDay())
-                ->count();
-            $statistics['failed_scans'] = DB::table('tracked_person_instagram_snapshots')
-                ->where('status_level', 'error')
-                ->where('analyzed_at', '>=', now()->subDay())
-                ->count();
-        }
+        $statistics['scans_today'] = $this->scanRecordCountSince(now()->startOfDay());
+        $statistics['failed_scans'] = $this->scanRecordCountSince(now()->subDay(), 'error');
 
         return $statistics;
     }
 
     private function runningScanCount(): int
     {
+        $trackedPersonIds = collect();
+        $activeSince = now()->subHours(6);
+
         if (
-            ! Schema::hasTable('tracked_person_instagram_snapshots')
-            || ! Schema::hasColumn('tracked_people', 'last_instagram_status_level')
+            Schema::hasTable('tracked_people')
+            && Schema::hasColumn('tracked_people', 'last_instagram_status_level')
         ) {
-            return 0;
+            $trackedPersonIds = $trackedPersonIds->concat(
+                DB::table('tracked_people')
+                    ->where('last_instagram_status_level', 'partial')
+                    ->where('updated_at', '>=', $activeSince)
+                    ->get(['id', 'last_instagram_status_message'])
+                    ->filter(fn (object $person): bool => $this->messageRepresentsRunningScan(
+                        (string) ($person->last_instagram_status_message ?? ''),
+                    ))
+                    ->pluck('id'),
+            );
         }
 
-        $latestSnapshots = DB::table('tracked_person_instagram_snapshots')
-            ->selectRaw('tracked_person_id, MAX(id) as snapshot_id')
-            ->groupBy('tracked_person_id');
+        if (Schema::hasTable('tracked_person_instagram_public_profile_scans')) {
+            $trackedPersonIds = $trackedPersonIds->concat(
+                DB::table('tracked_person_instagram_public_profile_scans')
+                    ->where('status_level', 'partial')
+                    ->where('analyzed_at', '>=', $activeSince)
+                    ->get(['tracked_person_id', 'raw_payload'])
+                    ->filter(function (object $scan): bool {
+                        $payload = json_decode((string) ($scan->raw_payload ?? ''), true);
 
-        return DB::table('tracked_people')
-            ->joinSub($latestSnapshots, 'latest_snapshots', function ($join): void {
-                $join->on('latest_snapshots.tracked_person_id', '=', 'tracked_people.id');
-            })
-            ->join('tracked_person_instagram_snapshots as snapshot', 'snapshot.id', '=', 'latest_snapshots.snapshot_id')
-            ->where('tracked_people.last_instagram_status_level', 'partial')
-            ->where('snapshot.analyzed_at', '>=', now()->subMinutes(5))
-            ->get([
-                'snapshot.raw_payload',
-                'tracked_people.last_instagram_status_message as status_message',
-            ])
-            ->filter(function (object $snapshot): bool {
-                $payload = json_decode((string) $snapshot->raw_payload, true);
-                $phase = strtolower((string) data_get($payload, 'analysisPolicy.lastProgressPhase', ''));
-                $stage = strtolower((string) data_get($payload, 'analysisPolicy.lastProgressStage', ''));
-                $message = strtolower((string) ($snapshot->status_message ?? ''));
+                        return is_array($payload)
+                            && data_get($payload, 'progressStatus') === 'in_progress'
+                            && ! (bool) data_get($payload, 'gracefullyStopped', false)
+                            && ! (bool) data_get($payload, 'stoppedForRateLimit', false);
+                    })
+                    ->pluck('tracked_person_id'),
+            );
+        }
 
-                return is_array($payload)
-                    && (bool) data_get($payload, 'analysisPolicy.progressSnapshot', false)
-                    && ! in_array($phase, ['done', 'error'], true)
-                    && $stage !== 'scan-stop-requested'
-                    && ! str_contains($message, 'fehlgeschlagen')
-                    && ! str_contains($message, 'abgebrochen')
-                    && ! str_contains($message, 'beendet')
-                    && ! str_contains($message, 'abgeschlossen');
-            })
+        return $trackedPersonIds
+            ->filter(fn ($id): bool => is_numeric($id))
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
             ->count();
+    }
+
+    private function scanRecordCountSince(\DateTimeInterface $since, ?string $statusLevel = null): int
+    {
+        return collect($this->scanSources())->sum(function (string $timestampColumn, string $table) use ($since, $statusLevel): int {
+            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $timestampColumn)) {
+                return 0;
+            }
+
+            $query = DB::table($table)->where($timestampColumn, '>=', $since);
+
+            if ($statusLevel !== null && Schema::hasColumn($table, 'status_level')) {
+                $query->where('status_level', $statusLevel);
+            }
+
+            if (Schema::hasColumn($table, 'deleted_at')) {
+                $query->whereNull('deleted_at');
+            }
+
+            return $query->count();
+        });
+    }
+
+    private function messageRepresentsRunningScan(string $message): bool
+    {
+        $message = strtolower(trim($message));
+
+        if ($message === '') {
+            return false;
+        }
+
+        foreach (['fehlgeschlagen', 'abgebrochen', 'beendet', 'abgeschlossen'] as $terminalTerm) {
+            if (str_contains($message, $terminalTerm)) {
+                return false;
+            }
+        }
+
+        return str_contains($message, 'laeuft')
+            || str_contains($message, 'läuft')
+            || str_contains($message, 'wird vorbereitet')
+            || str_contains($message, 'fortgesetzt');
+    }
+
+    private function scanSources(): array
+    {
+        return [
+            'tracked_person_instagram_snapshots' => 'analyzed_at',
+            'instagram_profile_list_scans' => 'scanned_at',
+            'instagram_post_scans' => 'scanned_at',
+            'tracked_person_instagram_suggestion_scans' => 'analyzed_at',
+            'tracked_person_instagram_public_profile_scans' => 'analyzed_at',
+        ];
     }
 }

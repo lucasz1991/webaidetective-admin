@@ -10,12 +10,22 @@ use Livewire\Component;
 
 class ScanMonitor extends Component
 {
+    private const DISPLAY_LIMIT = 24;
+
+    private const SOURCE_LIMIT = 30;
+
+    private const RUNNING_WINDOW_HOURS = 6;
+
+    private ?string $assetBaseUrl = null;
+
     public string $filter = 'all';
 
     public function render()
     {
         $tablesAvailable = Schema::hasTable('tracked_people')
-            && Schema::hasTable('tracked_person_instagram_snapshots');
+            && collect($this->scanTableNames())->contains(
+                fn (string $table): bool => Schema::hasTable($table),
+            );
 
         return view('livewire.admin.dashboard.scan-monitor', [
             'scans' => $tablesAvailable ? $this->loadScans() : collect(),
@@ -25,41 +35,75 @@ class ScanMonitor extends Component
 
     private function loadScans(): Collection
     {
-        $running = $this->filter !== 'completed'
-            ? $this->loadRunningScans()
-            : collect();
-        $recent = $this->filter !== 'running'
-            ? $this->loadRecentScans()
-            : collect();
+        $scans = collect()
+            ->concat($this->loadRunningTrackedPersonScans())
+            ->concat($this->loadSnapshotScans())
+            ->concat($this->loadProfileListScans())
+            ->concat($this->loadPostScans())
+            ->concat($this->loadSuggestionScans())
+            ->concat($this->loadPublicConnectionScans())
+            ->unique('scan_key')
+            ->filter(fn (object $scan): bool => match ($this->filter) {
+                'running' => $scan->is_running,
+                'completed' => ! $scan->is_running,
+                default => true,
+            })
+            ->sortByDesc(fn (object $scan): int => $scan->scanned_at
+                ? (strtotime((string) $scan->scanned_at) ?: 0)
+                : 0);
 
-        return $running
-            ->concat($recent)
-            ->unique(fn (object $scan) => $scan->snapshot_id
-                ? 'snapshot-'.$scan->snapshot_id
-                : 'person-'.$scan->tracked_person_id)
-            ->take(12)
-            ->values();
+        return $scans->take(self::DISPLAY_LIMIT)->values();
     }
 
-    private function loadRunningScans(): Collection
+    private function loadRunningTrackedPersonScans(): Collection
     {
-        $latestSnapshots = DB::table('tracked_person_instagram_snapshots')
-            ->selectRaw('tracked_person_id, MAX(id) as snapshot_id')
-            ->groupBy('tracked_person_id');
+        if (
+            ! Schema::hasTable('tracked_people')
+            || ! Schema::hasColumn('tracked_people', 'last_instagram_status_level')
+        ) {
+            return collect();
+        }
+
+        $query = DB::table('tracked_people')
+            ->leftJoin('users', 'users.id', '=', 'tracked_people.user_id');
+
+        if (Schema::hasTable('tracked_person_instagram_snapshots')) {
+            $latestSnapshots = DB::table('tracked_person_instagram_snapshots')
+                ->selectRaw('tracked_person_id, MAX(id) as snapshot_id')
+                ->groupBy('tracked_person_id');
+
+            $query
+                ->leftJoinSub($latestSnapshots, 'latest_snapshots', function ($join): void {
+                    $join->on('latest_snapshots.tracked_person_id', '=', 'tracked_people.id');
+                })
+                ->leftJoin(
+                    'tracked_person_instagram_snapshots as snapshot',
+                    'snapshot.id',
+                    '=',
+                    'latest_snapshots.snapshot_id',
+                );
+        }
+
         $profileIdColumn = Schema::hasColumn('tracked_people', 'current_instagram_profile_id')
             ? 'tracked_people.current_instagram_profile_id as instagram_profile_id'
             : DB::raw('NULL as instagram_profile_id');
+        $snapshotColumns = Schema::hasTable('tracked_person_instagram_snapshots')
+            ? [
+                'snapshot.id as snapshot_id',
+                'snapshot.screenshot_path',
+                'snapshot.raw_payload',
+            ]
+            : [
+                DB::raw('NULL as snapshot_id'),
+                DB::raw('NULL as screenshot_path'),
+                DB::raw('NULL as raw_payload'),
+            ];
 
-        return DB::table('tracked_people')
-            ->leftJoin('users', 'users.id', '=', 'tracked_people.user_id')
-            ->leftJoinSub($latestSnapshots, 'latest_snapshots', function ($join): void {
-                $join->on('latest_snapshots.tracked_person_id', '=', 'tracked_people.id');
-            })
-            ->leftJoin('tracked_person_instagram_snapshots as snapshot', 'snapshot.id', '=', 'latest_snapshots.snapshot_id')
+        return $query
             ->where('tracked_people.last_instagram_status_level', 'partial')
-            ->where('snapshot.analyzed_at', '>=', now()->subMinutes(5))
+            ->where('tracked_people.updated_at', '>=', now()->subHours(self::RUNNING_WINDOW_HOURS))
             ->orderByDesc('tracked_people.updated_at')
-            ->limit(30)
+            ->limit(self::SOURCE_LIMIT)
             ->get([
                 'tracked_people.id as tracked_person_id',
                 $profileIdColumn,
@@ -69,7 +113,6 @@ class ScanMonitor extends Component
                 'tracked_people.alias',
                 'tracked_people.instagram_profile_image_path',
                 'tracked_people.profile_image_path',
-                'tracked_people.last_instagram_status_level as status_level',
                 'tracked_people.last_instagram_status_message as status_message',
                 'tracked_people.updated_at as scanned_at',
                 'tracked_people.instagram_followers_count as followers_count',
@@ -77,39 +120,70 @@ class ScanMonitor extends Component
                 'tracked_people.instagram_posts_count as posts_count',
                 'users.id as user_id',
                 'users.name as user_name',
-                'snapshot.id as snapshot_id',
-                'snapshot.screenshot_path',
-                'snapshot.raw_payload',
-                'snapshot.analyzed_at as snapshot_analyzed_at',
+                ...$snapshotColumns,
             ])
             ->filter(function (object $scan): bool {
                 $payload = $this->decodePayload($scan->raw_payload ?? null);
-                $phase = strtolower((string) data_get($payload, 'analysisPolicy.lastProgressPhase', ''));
-                $stage = strtolower((string) data_get($payload, 'analysisPolicy.lastProgressStage', ''));
-                $message = strtolower((string) ($scan->status_message ?? ''));
 
-                return (bool) data_get($payload, 'analysisPolicy.progressSnapshot', false)
-                    && ! in_array($phase, ['done', 'error'], true)
-                    && $stage !== 'scan-stop-requested'
-                    && ! str_contains($message, 'fehlgeschlagen')
-                    && ! str_contains($message, 'abgebrochen')
-                    && ! str_contains($message, 'beendet')
-                    && ! str_contains($message, 'abgeschlossen');
+                return $this->payloadRepresentsRunningScan($payload)
+                    || $this->messageRepresentsRunningScan((string) ($scan->status_message ?? ''));
             })
-            ->map(fn (object $scan) => $this->normalizeScan($scan, true));
+            ->map(function (object $scan): object {
+                $payload = $this->decodePayload($scan->raw_payload ?? null);
+                $scanType = $this->resolveScanType($payload, (string) ($scan->status_message ?? ''));
+                $name = $this->trackedPersonDisplayName($scan);
+                $profileImagePath = $scan->instagram_profile_image_path
+                    ?? $scan->profile_image_path
+                    ?? null;
+
+                return $this->makeScan([
+                    'scan_key' => 'active-person-'.$scan->tracked_person_id,
+                    'scan_type' => $scanType,
+                    'snapshot_id' => $scan->snapshot_id,
+                    'tracked_person_id' => $scan->tracked_person_id,
+                    'instagram_profile_id' => $scan->instagram_profile_id,
+                    'username' => $scan->instagram_username,
+                    'display_name' => $name,
+                    'user_id' => $scan->user_id,
+                    'user_name' => $scan->user_name,
+                    'status_level' => 'partial',
+                    'status_message' => $scan->status_message,
+                    'scanned_at' => $scan->scanned_at,
+                    'profile_image_url' => $this->storageUrl($profileImagePath),
+                    'screenshot_url' => $this->payloadRepresentsRunningScan($payload)
+                        ? $this->storageUrl($scan->screenshot_path)
+                            ?: $this->screenshotUrlFromPayload($payload)
+                        : null,
+                    'is_running' => true,
+                    'metrics' => $this->profileMetrics(
+                        $scan->posts_count,
+                        $scan->followers_count,
+                        $scan->following_count,
+                    ),
+                ]);
+            });
     }
 
-    private function loadRecentScans(): Collection
+    private function loadSnapshotScans(): Collection
     {
+        if (
+            ! Schema::hasTable('tracked_person_instagram_snapshots')
+            || ! Schema::hasTable('tracked_people')
+        ) {
+            return collect();
+        }
+
         $profileIdColumn = Schema::hasColumn('tracked_person_instagram_snapshots', 'instagram_profile_id')
             ? 'snapshot.instagram_profile_id'
-            : DB::raw('NULL as instagram_profile_id');
+            : (Schema::hasColumn('tracked_people', 'current_instagram_profile_id')
+                ? 'tracked_people.current_instagram_profile_id'
+                : DB::raw('NULL as instagram_profile_id'));
 
         return DB::table('tracked_person_instagram_snapshots as snapshot')
             ->join('tracked_people', 'tracked_people.id', '=', 'snapshot.tracked_person_id')
             ->leftJoin('users', 'users.id', '=', 'tracked_people.user_id')
             ->orderByDesc('snapshot.analyzed_at')
-            ->limit(12)
+            ->limit(self::SOURCE_LIMIT)
             ->get([
                 'snapshot.id as snapshot_id',
                 'snapshot.tracked_person_id',
@@ -131,42 +205,552 @@ class ScanMonitor extends Component
                 'users.id as user_id',
                 'users.name as user_name',
             ])
-            ->map(fn (object $scan) => $this->normalizeScan($scan, false));
+            ->map(function (object $scan): ?object {
+                $payload = $this->decodePayload($scan->raw_payload);
+
+                if ($this->payloadRepresentsRunningScan($payload)) {
+                    return null;
+                }
+
+                $scanType = $this->resolveScanType($payload, (string) $scan->status_message);
+
+                if (in_array($scanType, ['followers', 'following'], true)) {
+                    return null;
+                }
+
+                return $this->makeScan([
+                    'scan_key' => 'snapshot-'.$scan->snapshot_id,
+                    'scan_type' => $scanType,
+                    'snapshot_id' => $scan->snapshot_id,
+                    'tracked_person_id' => $scan->tracked_person_id,
+                    'instagram_profile_id' => $scan->instagram_profile_id,
+                    'username' => $scan->instagram_username,
+                    'display_name' => $this->trackedPersonDisplayName($scan),
+                    'user_id' => $scan->user_id,
+                    'user_name' => $scan->user_name,
+                    'status_level' => $scan->status_level,
+                    'status_message' => $scan->status_message,
+                    'scanned_at' => $scan->scanned_at,
+                    'profile_image_url' => $this->storageOrRemoteUrl(
+                        $scan->profile_image_path,
+                        $scan->profile_image_url,
+                    ),
+                    'screenshot_url' => $this->storageUrl($scan->screenshot_path)
+                        ?: $this->screenshotUrlFromPayload($payload),
+                    'is_running' => false,
+                    'metrics' => $this->profileMetrics(
+                        $scan->posts_count,
+                        $scan->followers_count,
+                        $scan->following_count,
+                    ),
+                ]);
+            })
+            ->filter()
+            ->values();
     }
 
-    private function normalizeScan(object $scan, bool $isRunning): object
+    private function loadProfileListScans(): Collection
     {
-        $payload = $this->decodePayload($scan->raw_payload ?? null);
-        $name = trim(collect([$scan->first_name, $scan->last_name])->filter()->implode(' '));
-        $profileImagePath = $scan->profile_image_path
-            ?? $scan->instagram_profile_image_path
-            ?? null;
-        $scannedAt = $isRunning
-            ? ($scan->snapshot_analyzed_at ?? $scan->scanned_at)
-            : $scan->scanned_at;
+        if (
+            ! Schema::hasTable('instagram_profile_list_scans')
+            || ! Schema::hasTable('instagram_profiles')
+        ) {
+            return collect();
+        }
+
+        $query = DB::table('instagram_profile_list_scans as scan')
+            ->join('instagram_profiles as profile', 'profile.id', '=', 'scan.instagram_profile_id')
+            ->leftJoin('tracked_people', 'tracked_people.id', '=', 'scan.tracked_person_id')
+            ->leftJoin('users', 'users.id', '=', 'scan.user_id');
+
+        if (Schema::hasColumn('instagram_profile_list_scans', 'deleted_at')) {
+            $query->whereNull('scan.deleted_at');
+        }
+
+        return $query
+            ->orderByDesc('scan.scanned_at')
+            ->limit(self::SOURCE_LIMIT)
+            ->get([
+                'scan.id as scan_id',
+                'scan.snapshot_id',
+                'scan.tracked_person_id',
+                'scan.instagram_profile_id',
+                'scan.list_type',
+                'scan.scan_mode',
+                'scan.status_level',
+                'scan.status_message',
+                'scan.expected_count',
+                'scan.observed_count',
+                'scan.active_count',
+                'scan.added_count',
+                'scan.removed_count',
+                'scan.raw_payload',
+                'scan.scanned_at',
+                'profile.username as instagram_username',
+                'profile.display_name as profile_display_name',
+                'profile.full_name as profile_full_name',
+                'profile.profile_image_path',
+                'profile.profile_image_url',
+                'tracked_people.first_name',
+                'tracked_people.last_name',
+                'tracked_people.alias',
+                'users.id as user_id',
+                'users.name as user_name',
+            ])
+            ->map(function (object $scan): object {
+                $payload = $this->decodePayload($scan->raw_payload);
+                $scanType = $scan->list_type === 'following' ? 'following' : 'followers';
+
+                return $this->makeScan([
+                    'scan_key' => 'profile-list-'.$scan->scan_id,
+                    'scan_type' => $scanType,
+                    'snapshot_id' => $scan->snapshot_id,
+                    'tracked_person_id' => $scan->tracked_person_id,
+                    'instagram_profile_id' => $scan->instagram_profile_id,
+                    'username' => $scan->instagram_username,
+                    'display_name' => $this->instagramProfileDisplayName($scan),
+                    'user_id' => $scan->user_id,
+                    'user_name' => $scan->user_name,
+                    'status_level' => $scan->status_level,
+                    'status_message' => $scan->status_message,
+                    'scanned_at' => $scan->scanned_at,
+                    'profile_image_url' => $this->storageOrRemoteUrl(
+                        $scan->profile_image_path,
+                        $scan->profile_image_url,
+                    ),
+                    'screenshot_url' => $this->screenshotUrlFromPayload($payload),
+                    'is_running' => false,
+                    'context_label' => $scan->scan_mode
+                        ? 'Modus: '.str_replace('_', ' ', (string) $scan->scan_mode)
+                        : null,
+                    'metrics' => [
+                        $this->metric('Beobachtet', $scan->observed_count),
+                        $this->metric('Aktiv', $scan->active_count),
+                        $this->metric('Neu', $scan->added_count),
+                    ],
+                ]);
+            });
+    }
+
+    private function loadPostScans(): Collection
+    {
+        if (
+            ! Schema::hasTable('instagram_post_scans')
+            || ! Schema::hasTable('instagram_profiles')
+        ) {
+            return collect();
+        }
+
+        return DB::table('instagram_post_scans as scan')
+            ->join('instagram_profiles as profile', 'profile.id', '=', 'scan.instagram_profile_id')
+            ->leftJoin('tracked_people', 'tracked_people.id', '=', 'scan.tracked_person_id')
+            ->leftJoin('users', 'users.id', '=', 'scan.user_id')
+            ->orderByDesc('scan.scanned_at')
+            ->limit(self::SOURCE_LIMIT)
+            ->get([
+                'scan.id as scan_id',
+                'scan.snapshot_id',
+                'scan.tracked_person_id',
+                'scan.instagram_profile_id',
+                'scan.status_level',
+                'scan.status_message',
+                'scan.observed_count',
+                'scan.new_count',
+                'scan.updated_count',
+                'scan.raw_payload',
+                'scan.scanned_at',
+                'profile.username as instagram_username',
+                'profile.display_name as profile_display_name',
+                'profile.full_name as profile_full_name',
+                'profile.profile_image_path',
+                'profile.profile_image_url',
+                'tracked_people.first_name',
+                'tracked_people.last_name',
+                'tracked_people.alias',
+                'users.id as user_id',
+                'users.name as user_name',
+            ])
+            ->map(function (object $scan): object {
+                $payload = $this->decodePayload($scan->raw_payload);
+
+                return $this->makeScan([
+                    'scan_key' => 'posts-'.$scan->scan_id,
+                    'scan_type' => 'posts',
+                    'snapshot_id' => $scan->snapshot_id,
+                    'tracked_person_id' => $scan->tracked_person_id,
+                    'instagram_profile_id' => $scan->instagram_profile_id,
+                    'username' => $scan->instagram_username,
+                    'display_name' => $this->instagramProfileDisplayName($scan),
+                    'user_id' => $scan->user_id,
+                    'user_name' => $scan->user_name,
+                    'status_level' => $scan->status_level,
+                    'status_message' => $scan->status_message,
+                    'scanned_at' => $scan->scanned_at,
+                    'profile_image_url' => $this->storageOrRemoteUrl(
+                        $scan->profile_image_path,
+                        $scan->profile_image_url,
+                    ),
+                    'screenshot_url' => $this->screenshotUrlFromPayload($payload),
+                    'is_running' => false,
+                    'metrics' => [
+                        $this->metric('Beobachtet', $scan->observed_count),
+                        $this->metric('Neu', $scan->new_count),
+                        $this->metric('Aktualisiert', $scan->updated_count),
+                    ],
+                ]);
+            });
+    }
+
+    private function loadSuggestionScans(): Collection
+    {
+        if (
+            ! Schema::hasTable('tracked_person_instagram_suggestion_scans')
+            || ! Schema::hasTable('tracked_people')
+        ) {
+            return collect();
+        }
+
+        $profileIdColumn = Schema::hasColumn('tracked_people', 'current_instagram_profile_id')
+            ? 'tracked_people.current_instagram_profile_id as instagram_profile_id'
+            : DB::raw('NULL as instagram_profile_id');
+
+        return DB::table('tracked_person_instagram_suggestion_scans as scan')
+            ->join('tracked_people', 'tracked_people.id', '=', 'scan.tracked_person_id')
+            ->leftJoin('users', 'users.id', '=', 'scan.user_id')
+            ->orderByDesc('scan.analyzed_at')
+            ->limit(self::SOURCE_LIMIT)
+            ->get([
+                'scan.id as scan_id',
+                'scan.tracked_person_id',
+                $profileIdColumn,
+                'scan.target_username as instagram_username',
+                'scan.status_level',
+                'scan.status_message',
+                'scan.suggestions_observed_count',
+                'scan.suggestions_checked_count',
+                'scan.suggestion_matches_count',
+                'scan.raw_payload',
+                'scan.analyzed_at as scanned_at',
+                'tracked_people.first_name',
+                'tracked_people.last_name',
+                'tracked_people.alias',
+                'tracked_people.instagram_profile_image_path',
+                'tracked_people.profile_image_path',
+                'users.id as user_id',
+                'users.name as user_name',
+            ])
+            ->map(function (object $scan): object {
+                $payload = $this->decodePayload($scan->raw_payload);
+
+                return $this->makeScan([
+                    'scan_key' => 'suggestions-'.$scan->scan_id,
+                    'scan_type' => 'suggestions',
+                    'snapshot_id' => null,
+                    'tracked_person_id' => $scan->tracked_person_id,
+                    'instagram_profile_id' => $scan->instagram_profile_id,
+                    'username' => $scan->instagram_username,
+                    'display_name' => $this->trackedPersonDisplayName($scan),
+                    'user_id' => $scan->user_id,
+                    'user_name' => $scan->user_name,
+                    'status_level' => $scan->status_level,
+                    'status_message' => $scan->status_message,
+                    'scanned_at' => $scan->scanned_at,
+                    'profile_image_url' => $this->storageUrl(
+                        $scan->instagram_profile_image_path ?? $scan->profile_image_path,
+                    ),
+                    'screenshot_url' => $this->screenshotUrlFromPayload($payload),
+                    'is_running' => false,
+                    'metrics' => [
+                        $this->metric('Gefunden', $scan->suggestions_observed_count),
+                        $this->metric('Geprueft', $scan->suggestions_checked_count),
+                        $this->metric('Treffer', $scan->suggestion_matches_count),
+                    ],
+                ]);
+            });
+    }
+
+    private function loadPublicConnectionScans(): Collection
+    {
+        if (
+            ! Schema::hasTable('tracked_person_instagram_public_profile_scans')
+            || ! Schema::hasTable('tracked_people')
+        ) {
+            return collect();
+        }
+
+        $profileIdColumn = Schema::hasColumn('tracked_people', 'current_instagram_profile_id')
+            ? 'tracked_people.current_instagram_profile_id as instagram_profile_id'
+            : DB::raw('NULL as instagram_profile_id');
+
+        return DB::table('tracked_person_instagram_public_profile_scans as scan')
+            ->join('tracked_people', 'tracked_people.id', '=', 'scan.tracked_person_id')
+            ->leftJoin('users', 'users.id', '=', 'scan.user_id')
+            ->orderByDesc('scan.analyzed_at')
+            ->limit(self::SOURCE_LIMIT)
+            ->get([
+                'scan.id as scan_id',
+                'scan.tracked_person_id',
+                $profileIdColumn,
+                'scan.target_username as instagram_username',
+                'scan.public_username',
+                'scan.relation_type',
+                'scan.followers_observed_count',
+                'scan.following_observed_count',
+                'scan.status_level',
+                'scan.status_message',
+                'scan.raw_payload',
+                'scan.analyzed_at as scanned_at',
+                'tracked_people.first_name',
+                'tracked_people.last_name',
+                'tracked_people.alias',
+                'tracked_people.instagram_profile_image_path',
+                'tracked_people.profile_image_path',
+                'users.id as user_id',
+                'users.name as user_name',
+            ])
+            ->map(function (object $scan): object {
+                $payload = $this->decodePayload($scan->raw_payload);
+                $isRunning = $this->publicConnectionScanIsRunning($scan, $payload);
+                $foundConnections = (int) data_get($payload, 'foundFollowers', 0)
+                    + (int) data_get($payload, 'foundFollowing', 0);
+
+                if ($foundConnections === 0 && ! in_array($scan->relation_type, ['none', 'unknown', 'candidate_search'], true)) {
+                    $foundConnections = 1;
+                }
+
+                return $this->makeScan([
+                    'scan_key' => 'public-connections-'.$scan->scan_id,
+                    'scan_type' => 'public_connections',
+                    'snapshot_id' => null,
+                    'tracked_person_id' => $scan->tracked_person_id,
+                    'instagram_profile_id' => $scan->instagram_profile_id,
+                    'username' => $scan->instagram_username,
+                    'display_name' => $this->trackedPersonDisplayName($scan),
+                    'user_id' => $scan->user_id,
+                    'user_name' => $scan->user_name,
+                    'status_level' => $scan->status_level,
+                    'status_message' => $scan->status_message,
+                    'scanned_at' => $scan->scanned_at,
+                    'profile_image_url' => $this->storageUrl(
+                        $scan->instagram_profile_image_path ?? $scan->profile_image_path,
+                    ),
+                    'screenshot_url' => $this->screenshotUrlFromPayload($payload),
+                    'is_running' => $isRunning,
+                    'context_label' => $scan->public_username
+                        ? 'Pruefprofil @'.ltrim((string) $scan->public_username, '@')
+                        : null,
+                    'metrics' => [
+                        $this->metric('Follower gepr.', $scan->followers_observed_count),
+                        $this->metric('Gefolgt gepr.', $scan->following_observed_count),
+                        $this->metric('Treffer', $foundConnections),
+                    ],
+                ]);
+            });
+    }
+
+    private function makeScan(array $attributes): object
+    {
+        $scanType = (string) ($attributes['scan_type'] ?? 'analysis');
 
         return (object) [
-            'snapshot_id' => $scan->snapshot_id ? (int) $scan->snapshot_id : null,
-            'tracked_person_id' => (int) $scan->tracked_person_id,
-            'instagram_profile_id' => $scan->instagram_profile_id ? (int) $scan->instagram_profile_id : null,
-            'username' => ltrim((string) $scan->instagram_username, '@'),
-            'display_name' => $name !== '' ? $name : ($scan->alias ?: 'Unbenannte Person'),
-            'user_id' => $scan->user_id ? (int) $scan->user_id : null,
-            'user_name' => $scan->user_name,
-            'status_level' => $isRunning ? 'partial' : ($scan->status_level ?: 'unknown'),
-            'status_message' => $scan->status_message,
-            'scanned_at' => $scannedAt,
-            'followers_count' => $scan->followers_count,
-            'following_count' => $scan->following_count,
-            'posts_count' => $scan->posts_count,
-            'profile_image_url' => PublicAssetUrl::fromStorageOrRemote(
-                $profileImagePath,
-                $scan->profile_image_url ?? null,
-            ),
-            'screenshot_url' => PublicAssetUrl::storage($scan->screenshot_path)
-                ?: $this->normalizeLiveScreenshotUrl(data_get($payload, 'liveScreenshotUrl')),
-            'is_running' => $isRunning,
+            'scan_key' => (string) $attributes['scan_key'],
+            'scan_type' => $scanType,
+            'scan_type_label' => $this->scanTypeLabel($scanType),
+            'scan_type_classes' => $this->scanTypeClasses($scanType),
+            'context_label' => $attributes['context_label'] ?? null,
+            'snapshot_id' => $this->nullableInteger($attributes['snapshot_id'] ?? null),
+            'tracked_person_id' => $this->nullableInteger($attributes['tracked_person_id'] ?? null),
+            'instagram_profile_id' => $this->nullableInteger($attributes['instagram_profile_id'] ?? null),
+            'username' => ltrim(trim((string) ($attributes['username'] ?? '')), '@'),
+            'display_name' => trim((string) ($attributes['display_name'] ?? '')) ?: 'Unbenanntes Profil',
+            'user_id' => $this->nullableInteger($attributes['user_id'] ?? null),
+            'user_name' => $attributes['user_name'] ?? null,
+            'status_level' => $this->normalizeStatusLevel((string) ($attributes['status_level'] ?? 'unknown')),
+            'status_message' => $attributes['status_message'] ?? null,
+            'scanned_at' => $attributes['scanned_at'] ?? null,
+            'profile_image_url' => $attributes['profile_image_url'] ?? null,
+            'screenshot_url' => $attributes['screenshot_url'] ?? null,
+            'is_running' => (bool) ($attributes['is_running'] ?? false),
+            'metrics' => collect($attributes['metrics'] ?? [])->take(3)->values(),
         ];
+    }
+
+    private function resolveScanType(array $payload, string $message = ''): string
+    {
+        $mode = strtolower(trim((string) data_get($payload, 'analysisPolicy.scanMode', '')));
+
+        if (in_array($mode, ['mini', 'full', 'followers', 'following'], true)) {
+            return $mode;
+        }
+
+        $haystack = strtolower($message.' '.(string) data_get($payload, 'statusMessage', ''));
+
+        return match (true) {
+            str_contains($haystack, 'public-profile-verbindung'),
+            str_contains($haystack, 'verbindungsscan') => 'public_connections',
+            str_contains($haystack, 'vorschlag') => 'suggestions',
+            str_contains($haystack, 'beitrag'),
+            str_contains($haystack, 'post-scan'),
+            str_contains($haystack, 'postscan') => 'posts',
+            str_contains($haystack, 'gefolgt') => 'following',
+            str_contains($haystack, 'follower') => 'followers',
+            str_contains($haystack, 'voll') => 'full',
+            str_contains($haystack, 'mini') => 'mini',
+            default => 'analysis',
+        };
+    }
+
+    private function scanTypeLabel(string $scanType): string
+    {
+        return match ($scanType) {
+            'mini' => 'Mini-Scan',
+            'full' => 'Vollanalyse',
+            'followers' => 'Followerlisten-Scan',
+            'following' => 'Gefolgt-Listen-Scan',
+            'posts' => 'Beitragsscan',
+            'suggestions' => 'Vorschlagsscan',
+            'public_connections' => 'Verbindungsscan',
+            default => 'Profilanalyse',
+        };
+    }
+
+    private function scanTypeClasses(string $scanType): string
+    {
+        return match ($scanType) {
+            'mini' => 'bg-sky-100 text-sky-800 ring-sky-200',
+            'full' => 'bg-pink-100 text-pink-800 ring-pink-200',
+            'followers' => 'bg-blue-100 text-blue-800 ring-blue-200',
+            'following' => 'bg-cyan-100 text-cyan-800 ring-cyan-200',
+            'posts' => 'bg-violet-100 text-violet-800 ring-violet-200',
+            'suggestions' => 'bg-fuchsia-100 text-fuchsia-800 ring-fuchsia-200',
+            'public_connections' => 'bg-amber-100 text-amber-800 ring-amber-200',
+            default => 'bg-slate-100 text-slate-700 ring-slate-200',
+        };
+    }
+
+    private function profileMetrics(mixed $posts, mixed $followers, mixed $following): array
+    {
+        return [
+            $this->metric('Posts', $posts),
+            $this->metric('Follower', $followers),
+            $this->metric('Folgt', $following),
+        ];
+    }
+
+    private function metric(string $label, mixed $value): object
+    {
+        return (object) [
+            'label' => $label,
+            'value' => is_numeric($value) ? (int) $value : $value,
+        ];
+    }
+
+    private function trackedPersonDisplayName(object $scan): string
+    {
+        $name = trim(collect([
+            $scan->first_name ?? null,
+            $scan->last_name ?? null,
+        ])->filter()->implode(' '));
+
+        return $name !== ''
+            ? $name
+            : (trim((string) ($scan->alias ?? '')) ?: 'Unbenannte Person');
+    }
+
+    private function instagramProfileDisplayName(object $scan): string
+    {
+        foreach (['profile_display_name', 'profile_full_name', 'instagram_username'] as $field) {
+            $value = trim((string) ($scan->{$field} ?? ''));
+
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return $this->trackedPersonDisplayName($scan);
+    }
+
+    private function payloadRepresentsRunningScan(array $payload): bool
+    {
+        if (! (bool) data_get($payload, 'analysisPolicy.progressSnapshot', false)) {
+            return false;
+        }
+
+        $phase = strtolower((string) data_get($payload, 'analysisPolicy.lastProgressPhase', ''));
+        $stage = strtolower((string) data_get($payload, 'analysisPolicy.lastProgressStage', ''));
+
+        return ! in_array($phase, ['done', 'error'], true)
+            && $stage !== 'scan-stop-requested'
+            && data_get($payload, 'analysisPolicy.terminalStatus') === null;
+    }
+
+    private function messageRepresentsRunningScan(string $message): bool
+    {
+        $message = strtolower(trim($message));
+
+        if ($message === '') {
+            return false;
+        }
+
+        foreach (['fehlgeschlagen', 'abgebrochen', 'beendet', 'abgeschlossen'] as $terminalTerm) {
+            if (str_contains($message, $terminalTerm)) {
+                return false;
+            }
+        }
+
+        return str_contains($message, 'laeuft')
+            || str_contains($message, 'läuft')
+            || str_contains($message, 'wird vorbereitet')
+            || str_contains($message, 'fortgesetzt');
+    }
+
+    private function publicConnectionScanIsRunning(object $scan, array $payload): bool
+    {
+        $progressStatus = strtolower((string) data_get($payload, 'progressStatus', ''));
+
+        return $scan->status_level === 'partial'
+            && $progressStatus === 'in_progress'
+            && ! (bool) data_get($payload, 'gracefullyStopped', false)
+            && ! (bool) data_get($payload, 'stoppedForRateLimit', false)
+            && strtotime((string) $scan->scanned_at) >= now()->subHours(self::RUNNING_WINDOW_HOURS)->timestamp;
+    }
+
+    private function screenshotUrlFromPayload(array $payload): ?string
+    {
+        $paths = [];
+
+        foreach ([
+            data_get($payload, 'liveScreenshotUrl'),
+            data_get($payload, 'screenshotPath'),
+            data_get($payload, 'screenshot_path'),
+            data_get($payload, 'analysisPolicy.liveScreenshotUrl'),
+            data_get($payload, 'postsScan.screenshotPath'),
+            data_get($payload, 'suggestionsScan.screenshotPath'),
+        ] as $candidate) {
+            if (is_scalar($candidate) && trim((string) $candidate) !== '') {
+                $paths[] = (string) $candidate;
+            }
+        }
+
+        array_walk_recursive($payload, function (mixed $value, mixed $key) use (&$paths): void {
+            if (
+                in_array($key, ['liveScreenshotUrl', 'screenshotPath', 'screenshot_path'], true)
+                && is_scalar($value)
+                && trim((string) $value) !== ''
+            ) {
+                $paths[] = (string) $value;
+            }
+        });
+
+        foreach (array_reverse(array_values(array_unique($paths))) as $path) {
+            $url = $this->normalizeLiveScreenshotUrl($path);
+
+            if ($url) {
+                return $url;
+            }
+        }
+
+        return null;
     }
 
     private function normalizeLiveScreenshotUrl(mixed $url): ?string
@@ -185,7 +769,7 @@ class ScanMonitor extends Component
 
         if (is_string($path) && str_contains($path, '/storage/')) {
             $relativePath = ltrim(substr($path, strpos($path, '/storage/') + strlen('/storage/')), '/');
-            $normalizedUrl = PublicAssetUrl::storage($relativePath);
+            $normalizedUrl = $this->storageUrl($relativePath);
             $query = parse_url($url, PHP_URL_QUERY);
 
             return $normalizedUrl && is_string($query) && $query !== ''
@@ -193,7 +777,76 @@ class ScanMonitor extends Component
                 : $normalizedUrl;
         }
 
-        return PublicAssetUrl::storage($url);
+        return $this->storageUrl($url);
+    }
+
+    private function storageOrRemoteUrl(mixed $storagePath, mixed $remoteUrl = null): ?string
+    {
+        return $this->storageUrl($storagePath) ?: $this->publicUrl($remoteUrl);
+    }
+
+    private function storageUrl(mixed $path): ?string
+    {
+        if (! is_scalar($path)) {
+            return null;
+        }
+
+        $path = trim((string) $path);
+
+        if ($path === '') {
+            return null;
+        }
+
+        if ($this->isAbsoluteUrl($path)) {
+            return $path;
+        }
+
+        $prefix = str_starts_with($path, 'storage/') ? '' : 'storage/';
+
+        return $this->assetBaseUrl().'/'.$prefix.ltrim($path, '/');
+    }
+
+    private function publicUrl(mixed $url): ?string
+    {
+        if (! is_scalar($url)) {
+            return null;
+        }
+
+        $url = trim((string) $url);
+
+        if ($url === '') {
+            return null;
+        }
+
+        if ($this->isAbsoluteUrl($url)) {
+            return $url;
+        }
+
+        return $this->assetBaseUrl().'/'.ltrim($url, '/');
+    }
+
+    private function assetBaseUrl(): string
+    {
+        return $this->assetBaseUrl ??= PublicAssetUrl::baseUrl();
+    }
+
+    private function isAbsoluteUrl(string $value): bool
+    {
+        return str_starts_with($value, 'http://') || str_starts_with($value, 'https://');
+    }
+
+    private function normalizeStatusLevel(string $status): string
+    {
+        $status = strtolower(trim($status));
+
+        return in_array($status, ['success', 'error', 'cancelled', 'partial'], true)
+            ? $status
+            : 'unknown';
+    }
+
+    private function nullableInteger(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
     }
 
     private function decodePayload(mixed $payload): array
@@ -209,5 +862,16 @@ class ScanMonitor extends Component
         $decoded = json_decode($payload, true);
 
         return is_array($decoded) ? $decoded : [];
+    }
+
+    private function scanTableNames(): array
+    {
+        return [
+            'tracked_person_instagram_snapshots',
+            'instagram_profile_list_scans',
+            'instagram_post_scans',
+            'tracked_person_instagram_suggestion_scans',
+            'tracked_person_instagram_public_profile_scans',
+        ];
     }
 }
