@@ -49,7 +49,7 @@
             Die Scan-Tabellen sind in dieser Installation noch nicht verfuegbar.
         </div>
     @else
-        <div class="grid gap-5 p-5 sm:p-6 lg:grid-cols-2 xl:grid-cols-4">
+        <div class="grid gap-5 p-5 sm:p-6 xl:grid-cols-2">
             @forelse($scans as $scan)
                 @php
                     $statusClasses = match (true) {
@@ -79,114 +79,114 @@
 
                 <article
                     wire:key="{{ $scan->scan_key }}"
-                    class="group overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg {{ $borderClass }}"
+                    class="group overflow-hidden rounded-3xl border bg-white shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-xl {{ $borderClass }}"
                 >
-                    <div class="relative aspect-video overflow-hidden bg-gray-200">
-                        @if($scan->screenshot_url)
-                            <a href="{{ $scan->screenshot_url }}" target="_blank" rel="noopener" class="block h-full w-full">
-                                <img
-                                    src="{{ $scan->screenshot_url }}"
-                                    alt="Scan-Screenshot von {{ $scan->username }}"
-                                    class="h-full w-full object-contain transition duration-300 group-hover:scale-[1.01]"
-                                >
-                            </a>
-                        @else
-                            <div class="flex h-full items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 px-6 text-center">
-                                <div>
-                                    <svg class="mx-auto h-9 w-9 text-slate-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                        <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
-                                        <path d="m7 15 3-3 2 2 2-2 3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <div class="grid min-h-[25rem] md:grid-cols-[minmax(0,1fr)_13rem]">
+                        <div class="flex min-w-0 flex-col p-5 sm:p-6">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ring-1 {{ $statusClasses }}">
+                                    @if($scan->is_running)
+                                        <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"></span>
+                                    @endif
+                                    {{ $statusLabel }}
+                                </span>
+                                <span class="rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ring-1 {{ $scan->scan_type_classes }}">
+                                    {{ $scan->scan_type_label }}
+                                </span>
+                                @if($scan->context_label)
+                                    <span class="truncate text-[11px] font-semibold text-slate-500">{{ $scan->context_label }}</span>
+                                @endif
+                            </div>
+
+                            <div class="mt-5 flex items-start justify-between gap-4">
+                                <div class="flex min-w-0 items-center gap-3">
+                                    <div class="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200">
+                                        @if($scan->profile_image_url)
+                                            <img src="{{ $scan->profile_image_url }}" alt="{{ $scan->display_name }}" class="h-full w-full object-cover">
+                                        @else
+                                            <div class="flex h-full w-full items-center justify-center text-base font-black text-slate-500">{{ $initial }}</div>
+                                        @endif
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="truncate text-lg font-black tracking-tight text-slate-950">{{ $scan->display_name }}</div>
+                                        <div class="mt-0.5 truncate text-xs font-bold text-indigo-600">{{ $scan->username ? '@'.$scan->username : 'Kein Instagram-Handle' }}</div>
+                                        @if($scan->user_name)
+                                            <div class="mt-1 truncate text-xs text-slate-500">Besitzer: {{ $scan->user_name }}</div>
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="shrink-0 text-right text-[11px] text-slate-500">
+                                    <div class="font-bold text-slate-700">{{ $scan->scanned_at ? \Carbon\Carbon::parse($scan->scanned_at)->diffForHumans() : '-' }}</div>
+                                    @if($scan->scanned_at)
+                                        <div class="mt-1">{{ \Carbon\Carbon::parse($scan->scanned_at)->format('d.m.Y H:i') }}</div>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <div class="mt-5 flex gap-3 rounded-2xl bg-slate-50 p-4 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+                                <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-slate-400 shadow-sm ring-1 ring-slate-200">
+                                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                        <path d="M12 8v4l2.5 1.5M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                     </svg>
-                                    <div class="mt-3 text-xs font-bold uppercase tracking-wider text-slate-400">
-                                        {{ $scan->is_running ? 'Live-Screenshot wird vorbereitet' : 'Kein Screenshot gespeichert' }}
-                                    </div>
                                 </div>
+                                <div class="line-clamp-3">{{ $scan->status_message ?: 'Keine Statusmeldung vorhanden.' }}</div>
                             </div>
-                        @endif
 
-                        <div class="absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-3">
-                            <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black shadow-sm ring-1 {{ $statusClasses }}">
-                                @if($scan->is_running)
-                                    <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"></span>
+                            <div class="mt-5 grid grid-cols-3 gap-2">
+                                @foreach($scan->metrics as $metric)
+                                    <div class="min-w-0 rounded-2xl border border-slate-200 bg-white px-2 py-3 text-center shadow-sm">
+                                        <div class="truncate text-lg font-black tracking-tight text-slate-950">
+                                            {{ is_numeric($metric->value) ? number_format((int) $metric->value, 0, ',', '.') : ($metric->value ?: '-') }}
+                                        </div>
+                                        <div class="mt-0.5 truncate text-[9px] font-black uppercase tracking-wide text-slate-400" title="{{ $metric->label }}">
+                                            {{ $metric->label }}
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+
+                            <footer class="mt-auto flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-5">
+                                @if($scan->user_id)
+                                    <a href="{{ route('admin.user-profile', $scan->user_id) }}" wire:navigate class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950">
+                                        Benutzer
+                                    </a>
                                 @endif
-                                {{ $statusLabel }}
-                            </span>
-                            <span class="rounded-full px-3 py-1.5 text-[10px] font-black shadow-sm ring-1 {{ $scan->scan_type_classes }}">
-                                {{ $scan->scan_type_label }}
-                            </span>
-                        </div>
-
-                        @if($scan->screenshot_url)
-                            <span class="absolute bottom-3 right-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur">
-                                Screenshot oeffnen
-                            </span>
-                        @endif
-                    </div>
-
-                    <div class="p-5">
-                        <div class="mb-3 flex flex-wrap items-center gap-2">
-                            <span class="rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 {{ $scan->scan_type_classes }}">
-                                {{ $scan->scan_type_label }}
-                            </span>
-                            @if($scan->context_label)
-                                <span class="text-[11px] font-semibold text-slate-500">{{ $scan->context_label }}</span>
-                            @endif
-                        </div>
-
-                        <div class="flex items-start justify-between gap-4">
-                            <div class="flex min-w-0 items-center gap-3">
-                                <div class="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
-                                    @if($scan->profile_image_url)
-                                        <img src="{{ $scan->profile_image_url }}" alt="{{ $scan->display_name }}" class="h-full w-full object-cover">
-                                    @else
-                                        <div class="flex h-full w-full items-center justify-center text-sm font-black text-slate-500">{{ $initial }}</div>
-                                    @endif
-                                </div>
-                                <div class="min-w-0">
-                                    <div class="truncate text-base font-black text-slate-950">{{ $scan->display_name }}</div>
-                                    <div class="mt-0.5 truncate text-xs font-bold text-indigo-600">{{ $scan->username ? '@'.$scan->username : 'Kein Instagram-Handle' }}</div>
-                                    @if($scan->user_name)
-                                        <div class="mt-1 truncate text-xs text-slate-500">Besitzer: {{ $scan->user_name }}</div>
-                                    @endif
-                                </div>
-                            </div>
-                            <div class="shrink-0 text-right text-xs text-slate-500">
-                                <div class="font-semibold text-slate-700">{{ $scan->scanned_at ? \Carbon\Carbon::parse($scan->scanned_at)->diffForHumans() : '-' }}</div>
-                                @if($scan->scanned_at)
-                                    <div class="mt-1">{{ \Carbon\Carbon::parse($scan->scanned_at)->format('d.m.Y H:i') }}</div>
+                                @if($scan->instagram_profile_id)
+                                    <a href="{{ route('admin.profile-detail', $scan->instagram_profile_id) }}" wire:navigate class="rounded-xl bg-slate-950 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700">
+                                        Profildetails
+                                    </a>
                                 @endif
-                            </div>
+                            </footer>
                         </div>
 
-                        <div class="mt-4 rounded-xl bg-slate-50 px-3.5 py-3 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
-                            {{ $scan->status_message ?: 'Keine Statusmeldung vorhanden.' }}
-                        </div>
-
-                        <div class="mt-4 grid grid-cols-3 divide-x divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white text-center">
-                            @foreach($scan->metrics as $metric)
-                                <div class="min-w-0 px-2 py-3">
-                                    <div class="truncate text-base font-black text-slate-950">
-                                        {{ is_numeric($metric->value) ? number_format((int) $metric->value, 0, ',', '.') : ($metric->value ?: '-') }}
-                                    </div>
-                                    <div class="mt-0.5 truncate text-[10px] font-bold uppercase tracking-wide text-slate-400" title="{{ $metric->label }}">
-                                        {{ $metric->label }}
+                        <div class="relative min-h-80 overflow-hidden border-t border-slate-200 bg-slate-950 md:min-h-full md:border-l md:border-t-0">
+                            @if($scan->screenshot_url)
+                                <a href="{{ $scan->screenshot_url }}" target="_blank" rel="noopener" class="block h-full min-h-80 w-full md:min-h-full">
+                                    <img
+                                        src="{{ $scan->screenshot_url }}"
+                                        alt="Scan-Screenshot von {{ $scan->username }}"
+                                        class="h-full min-h-80 w-full object-cover object-top transition duration-500 group-hover:scale-[1.025] md:min-h-full"
+                                    >
+                                    <span class="absolute inset-x-3 bottom-3 rounded-xl bg-slate-950/85 px-3 py-2 text-center text-[10px] font-black uppercase tracking-wide text-white shadow-lg backdrop-blur">
+                                        Screenshot oeffnen
+                                    </span>
+                                </a>
+                            @else
+                                <div class="flex h-full min-h-80 items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 px-5 text-center md:min-h-full">
+                                    <div>
+                                        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-slate-500 ring-1 ring-white/10">
+                                            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
+                                                <path d="m7 15 3-3 2 2 2-2 3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </div>
+                                        <div class="mt-4 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                                            {{ $scan->is_running ? 'Live-Screenshot wird vorbereitet' : 'Kein Screenshot gespeichert' }}
+                                        </div>
                                     </div>
                                 </div>
-                            @endforeach
+                            @endif
                         </div>
-
-                        <footer class="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
-                            @if($scan->user_id)
-                                <a href="{{ route('admin.user-profile', $scan->user_id) }}" wire:navigate class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950">
-                                    Benutzer
-                                </a>
-                            @endif
-                            @if($scan->instagram_profile_id)
-                                <a href="{{ route('admin.profile-detail', $scan->instagram_profile_id) }}" wire:navigate class="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-indigo-700">
-                                    Profildetails
-                                </a>
-                            @endif
-                        </footer>
                     </div>
                 </article>
             @empty
