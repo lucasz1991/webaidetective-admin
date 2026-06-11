@@ -141,7 +141,6 @@ class ScanMonitor extends Component
         $profileImagePath = $scan->profile_image_path
             ?? $scan->instagram_profile_image_path
             ?? null;
-        $liveScreenshotUrl = trim((string) data_get($payload, 'liveScreenshotUrl', ''));
         $scannedAt = $isRunning
             ? ($scan->snapshot_analyzed_at ?? $scan->scanned_at)
             : $scan->scanned_at;
@@ -164,11 +163,37 @@ class ScanMonitor extends Component
                 $profileImagePath,
                 $scan->profile_image_url ?? null,
             ),
-            'screenshot_url' => $liveScreenshotUrl !== ''
-                ? PublicAssetUrl::storage($liveScreenshotUrl)
-                : PublicAssetUrl::storage($scan->screenshot_path),
+            'screenshot_url' => PublicAssetUrl::storage($scan->screenshot_path)
+                ?: $this->normalizeLiveScreenshotUrl(data_get($payload, 'liveScreenshotUrl')),
             'is_running' => $isRunning,
         ];
+    }
+
+    private function normalizeLiveScreenshotUrl(mixed $url): ?string
+    {
+        if (! is_scalar($url)) {
+            return null;
+        }
+
+        $url = trim((string) $url);
+
+        if ($url === '') {
+            return null;
+        }
+
+        $path = parse_url($url, PHP_URL_PATH);
+
+        if (is_string($path) && str_contains($path, '/storage/')) {
+            $relativePath = ltrim(substr($path, strpos($path, '/storage/') + strlen('/storage/')), '/');
+            $normalizedUrl = PublicAssetUrl::storage($relativePath);
+            $query = parse_url($url, PHP_URL_QUERY);
+
+            return $normalizedUrl && is_string($query) && $query !== ''
+                ? $normalizedUrl.'?'.$query
+                : $normalizedUrl;
+        }
+
+        return PublicAssetUrl::storage($url);
     }
 
     private function decodePayload(mixed $payload): array
