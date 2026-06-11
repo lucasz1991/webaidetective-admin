@@ -3,7 +3,7 @@
         $systemHasErrors = $statistics['failed_scans'] > 0;
     @endphp
 
-    <section class="relative overflow-hidden rounded-3xl bg-slate-950 text-white shadow-xl">
+    <section class="relative overflow-hidden rounded-3xl bg-blue-700 text-white shadow-xl">
         <div class="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl"></div>
         <div class="absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl"></div>
 

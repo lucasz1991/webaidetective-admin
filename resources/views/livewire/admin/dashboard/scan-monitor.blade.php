@@ -81,7 +81,7 @@
                     wire:key="{{ $scan->is_running ? 'running' : 'snapshot' }}-{{ $scan->is_running ? $scan->tracked_person_id : $scan->snapshot_id }}"
                     class="group overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg {{ $borderClass }}"
                 >
-                    <div class="relative aspect-video overflow-hidden bg-slate-950">
+                    <div class="relative aspect-video overflow-hidden bg-gray-200">
                         @if($scan->screenshot_url)
                             <a href="{{ $scan->screenshot_url }}" target="_blank" rel="noopener" class="block h-full w-full">
                                 <img
