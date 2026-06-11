@@ -112,9 +112,11 @@ class AdminDashboard extends Component
 
     private function scanRecordCountSince(\DateTimeInterface $since, ?string $statusLevel = null): int
     {
-        return collect($this->scanSources())->sum(function (string $timestampColumn, string $table) use ($since, $statusLevel): int {
+        $count = 0;
+
+        foreach ($this->scanSources() as $table => $timestampColumn) {
             if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $timestampColumn)) {
-                return 0;
+                continue;
             }
 
             $query = DB::table($table)->where($timestampColumn, '>=', $since);
@@ -127,8 +129,10 @@ class AdminDashboard extends Component
                 $query->whereNull('deleted_at');
             }
 
-            return $query->count();
-        });
+            $count += $query->count();
+        }
+
+        return $count;
     }
 
     private function messageRepresentsRunningScan(string $message): bool
