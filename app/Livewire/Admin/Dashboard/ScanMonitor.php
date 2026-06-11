@@ -10,7 +10,7 @@ use Livewire\Component;
 
 class ScanMonitor extends Component
 {
-    private const DISPLAY_LIMIT = 24;
+    private const DISPLAY_LIMIT = 4;
 
     private const SOURCE_LIMIT = 30;
 
