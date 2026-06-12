@@ -167,18 +167,7 @@
                                 <div class="line-clamp-3">{{ $scan->status_message ?: 'Keine Statusmeldung vorhanden.' }}</div>
                             </div>
 
-                            <div class="mt-5 grid grid-cols-3 gap-2">
-                                @foreach($scan->metrics as $metric)
-                                    <div class="min-w-0 rounded-2xl border border-slate-200 bg-white px-2 py-3 text-center shadow-sm">
-                                        <div class="truncate text-lg font-black tracking-tight text-slate-950">
-                                            {{ is_numeric($metric->value) ? number_format((int) $metric->value, 0, ',', '.') : ($metric->value ?: '-') }}
-                                        </div>
-                                        <div class="mt-0.5 truncate text-[9px] font-black uppercase tracking-wide text-slate-400" title="{{ $metric->label }}">
-                                            {{ $metric->label }}
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
+
 
                         </div>
 
