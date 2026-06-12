@@ -108,7 +108,7 @@
                                             aria-label="Profildetails von {{ $scan->display_name }} oeffnen"
                                         >
                                             @if($scan->profile_image_url)
-                                                <img src="{{ $scan->profile_image_url }}" alt="{{ $scan->display_name }}" class="h-full w-full object-cover">
+                                                <img src="{{ $scan->profile_image_url }}" alt="{{ $scan->display_name }}" class="h-full w-full object-cover object-top">
                                             @else
                                                 <div class="flex h-full w-full items-center justify-center text-base font-black text-slate-500">{{ $initial }}</div>
                                             @endif
