@@ -100,18 +100,53 @@
 
                             <div class="mt-5 flex items-start justify-between gap-4">
                                 <div class="flex min-w-0 items-center gap-3">
-                                    <div class="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200">
-                                        @if($scan->profile_image_url)
-                                            <img src="{{ $scan->profile_image_url }}" alt="{{ $scan->display_name }}" class="h-full w-full object-cover">
-                                        @else
-                                            <div class="flex h-full w-full items-center justify-center text-base font-black text-slate-500">{{ $initial }}</div>
-                                        @endif
-                                    </div>
+                                    @if($scan->instagram_profile_id)
+                                        <a
+                                            href="{{ route('admin.profile-detail', $scan->instagram_profile_id) }}"
+                                            wire:navigate
+                                            class="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200 transition hover:ring-2 hover:ring-indigo-400"
+                                            aria-label="Profildetails von {{ $scan->display_name }} oeffnen"
+                                        >
+                                            @if($scan->profile_image_url)
+                                                <img src="{{ $scan->profile_image_url }}" alt="{{ $scan->display_name }}" class="h-full w-full object-cover">
+                                            @else
+                                                <div class="flex h-full w-full items-center justify-center text-base font-black text-slate-500">{{ $initial }}</div>
+                                            @endif
+                                        </a>
+                                    @else
+                                        <div class="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200">
+                                            @if($scan->profile_image_url)
+                                                <img src="{{ $scan->profile_image_url }}" alt="{{ $scan->display_name }}" class="h-full w-full object-cover">
+                                            @else
+                                                <div class="flex h-full w-full items-center justify-center text-base font-black text-slate-500">{{ $initial }}</div>
+                                            @endif
+                                        </div>
+                                    @endif
                                     <div class="min-w-0">
-                                        <div class="truncate text-lg font-black tracking-tight text-slate-950">{{ $scan->display_name }}</div>
+                                        @if($scan->instagram_profile_id)
+                                            <a
+                                                href="{{ route('admin.profile-detail', $scan->instagram_profile_id) }}"
+                                                wire:navigate
+                                                class="block truncate text-lg font-black tracking-tight text-slate-950 transition hover:text-indigo-700"
+                                            >
+                                                {{ $scan->display_name }}
+                                            </a>
+                                        @else
+                                            <div class="truncate text-lg font-black tracking-tight text-slate-950">{{ $scan->display_name }}</div>
+                                        @endif
                                         <div class="mt-0.5 truncate text-xs font-bold text-indigo-600">{{ $scan->username ? '@'.$scan->username : 'Kein Instagram-Handle' }}</div>
                                         @if($scan->user_name)
-                                            <div class="mt-1 truncate text-xs text-slate-500">Besitzer: {{ $scan->user_name }}</div>
+                                            @if($scan->user_id)
+                                                <a
+                                                    href="{{ route('admin.user-profile', $scan->user_id) }}"
+                                                    wire:navigate
+                                                    class="mt-1 block truncate text-xs text-slate-500 transition hover:text-indigo-700"
+                                                >
+                                                    Besitzer: <span class="font-semibold">{{ $scan->user_name }}</span>
+                                                </a>
+                                            @else
+                                                <div class="mt-1 truncate text-xs text-slate-500">Besitzer: {{ $scan->user_name }}</div>
+                                            @endif
                                         @endif
                                     </div>
                                 </div>
@@ -145,18 +180,6 @@
                                 @endforeach
                             </div>
 
-                            <footer class="mt-auto flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-5">
-                                @if($scan->user_id)
-                                    <a href="{{ route('admin.user-profile', $scan->user_id) }}" wire:navigate class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950">
-                                        Benutzer
-                                    </a>
-                                @endif
-                                @if($scan->instagram_profile_id)
-                                    <a href="{{ route('admin.profile-detail', $scan->instagram_profile_id) }}" wire:navigate class="rounded-xl bg-slate-950 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700">
-                                        Profildetails
-                                    </a>
-                                @endif
-                            </footer>
                         </div>
 
                         <div class="relative min-h-80 overflow-hidden border-t border-slate-200 bg-slate-950 md:min-h-full md:border-l md:border-t-0">
