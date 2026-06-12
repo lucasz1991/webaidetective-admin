@@ -81,7 +81,7 @@
                     wire:key="{{ $scan->scan_key }}"
                     class="group overflow-hidden rounded-3xl border bg-white shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-xl {{ $borderClass }}"
                 >
-                    <div class="grid min-h-[25rem] md:grid-cols-[minmax(0,1fr)_13rem]">
+                    <div class="grid min-h-[15rem] md:grid-cols-[minmax(0,1fr)_13rem]">
                         <div class="flex min-w-0 flex-col p-5 sm:p-6">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ring-1 {{ $statusClasses }}">
