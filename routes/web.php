@@ -14,6 +14,7 @@ use App\Livewire\Admin\Employees;
 use App\Livewire\Admin\MailManagement;
 use App\Livewire\Admin\Profiles;
 use App\Livewire\Admin\ProfileDetail;
+use App\Livewire\Admin\Scans;
 use App\Livewire\Admin\UserProfile;
 use App\Livewire\Admin\ManageContacts;
 use App\Livewire\Admin\Cms\EditProject;
@@ -48,6 +49,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
         Route::get('/admin/safety', Safety::class)->name('admin.safety');
         Route::get('/admin/employees', Employees::class)->name('admin.employees');
         Route::get('/admin/mails', MailManagement::class)->name('admin.mails');
+        Route::get('/admin/scans', Scans::class)->name('admin.scans');
         Route::get('/admin/profiles', Profiles::class)->name('admin.profiles');
         Route::get('/admin/profiles/{profileId}', ProfileDetail::class)->name('admin.profile-detail');
         Route::get('/admin/user/{userId}', UserProfile::class)->name('admin.user-profile');

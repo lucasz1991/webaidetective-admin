@@ -66,6 +66,12 @@
                         <span data-key="t-users">Profile</span>
                     </a>
                 </li>
+                <li>
+                    <a href="{{ route('admin.scans') }}" class="block py-2.5 px-6 text-sm font-medium text-gray-600 transition-all duration-150 ease-linear hover:text-blue-500">
+                        <i data-feather="activity" fill="#545a6d33"></i>
+                        <span data-key="t-scans">Scans</span>
+                    </a>
+                </li>
             </ul>
         </div>
         <!-- Sidebar -->

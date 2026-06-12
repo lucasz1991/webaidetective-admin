@@ -62,5 +62,18 @@
                 </div>
             @endforelse
         </div>
+
+        @if($hasMore)
+            <div class="border-t border-slate-200 bg-slate-50/80 px-6 py-5 text-center">
+                <button
+                    type="button"
+                    wire:click="loadMore"
+                    wire:loading.attr="disabled"
+                    class="inline-flex items-center justify-center rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60"
+                >
+                    Weitere Scans laden
+                </button>
+            </div>
+        @endif
     @endif
 </section>

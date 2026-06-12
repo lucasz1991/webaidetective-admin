@@ -10,8 +10,6 @@ use Livewire\Component;
 
 class ScanMonitor extends Component
 {
-    private const DISPLAY_LIMIT = 4;
-
     private const SOURCE_LIMIT = 30;
 
     private const RUNNING_WINDOW_HOURS = 6;
@@ -20,15 +18,36 @@ class ScanMonitor extends Component
 
     public string $filter = 'all';
 
+    public int $displayLimit = 4;
+
+    public bool $showLoadMore = false;
+
+    public function mount(int $displayLimit = 4, bool $showLoadMore = false): void
+    {
+        $this->displayLimit = max(1, min(100, $displayLimit));
+        $this->showLoadMore = $showLoadMore;
+    }
+
+    public function loadMore(): void
+    {
+        if (! $this->showLoadMore) {
+            return;
+        }
+
+        $this->displayLimit += 100;
+    }
+
     public function render()
     {
         $tablesAvailable = Schema::hasTable('tracked_people')
             && collect($this->scanTableNames())->contains(
                 fn (string $table): bool => Schema::hasTable($table),
             );
+        $loadedScans = $tablesAvailable ? $this->loadScans() : collect();
 
         return view('livewire.admin.dashboard.scan-monitor', [
-            'scans' => $tablesAvailable ? $this->loadScans() : collect(),
+            'scans' => $loadedScans->take($this->displayLimit)->values(),
+            'hasMore' => $this->showLoadMore && $loadedScans->count() > $this->displayLimit,
             'tablesAvailable' => $tablesAvailable,
         ]);
     }
@@ -52,7 +71,15 @@ class ScanMonitor extends Component
                 ? (strtotime((string) $scan->scanned_at) ?: 0)
                 : 0);
 
-        return $scans->take(self::DISPLAY_LIMIT)->values();
+        return $scans->values();
+    }
+
+    private function sourceLimit(): int
+    {
+        return max(
+            self::SOURCE_LIMIT,
+            $this->displayLimit + ($this->showLoadMore ? 1 : 0),
+        );
     }
 
     private function loadRunningTrackedPersonScans(): Collection
@@ -103,7 +130,7 @@ class ScanMonitor extends Component
             ->where('tracked_people.last_instagram_status_level', 'partial')
             ->where('tracked_people.updated_at', '>=', now()->subHours(self::RUNNING_WINDOW_HOURS))
             ->orderByDesc('tracked_people.updated_at')
-            ->limit(self::SOURCE_LIMIT)
+            ->limit($this->sourceLimit())
             ->get([
                 'tracked_people.id as tracked_person_id',
                 $profileIdColumn,
@@ -183,7 +210,7 @@ class ScanMonitor extends Component
             ->join('tracked_people', 'tracked_people.id', '=', 'snapshot.tracked_person_id')
             ->leftJoin('users', 'users.id', '=', 'tracked_people.user_id')
             ->orderByDesc('snapshot.analyzed_at')
-            ->limit(self::SOURCE_LIMIT)
+            ->limit($this->sourceLimit())
             ->get([
                 'snapshot.id as snapshot_id',
                 'snapshot.tracked_person_id',
@@ -269,7 +296,7 @@ class ScanMonitor extends Component
 
         return $query
             ->orderByDesc('scan.scanned_at')
-            ->limit(self::SOURCE_LIMIT)
+            ->limit($this->sourceLimit())
             ->get([
                 'scan.id as scan_id',
                 'scan.snapshot_id',
@@ -346,7 +373,7 @@ class ScanMonitor extends Component
             ->leftJoin('tracked_people', 'tracked_people.id', '=', 'scan.tracked_person_id')
             ->leftJoin('users', 'users.id', '=', 'scan.user_id')
             ->orderByDesc('scan.scanned_at')
-            ->limit(self::SOURCE_LIMIT)
+            ->limit($this->sourceLimit())
             ->get([
                 'scan.id as scan_id',
                 'scan.snapshot_id',
@@ -418,7 +445,7 @@ class ScanMonitor extends Component
             ->join('tracked_people', 'tracked_people.id', '=', 'scan.tracked_person_id')
             ->leftJoin('users', 'users.id', '=', 'scan.user_id')
             ->orderByDesc('scan.analyzed_at')
-            ->limit(self::SOURCE_LIMIT)
+            ->limit($this->sourceLimit())
             ->get([
                 'scan.id as scan_id',
                 'scan.tracked_person_id',
@@ -486,7 +513,7 @@ class ScanMonitor extends Component
             ->join('tracked_people', 'tracked_people.id', '=', 'scan.tracked_person_id')
             ->leftJoin('users', 'users.id', '=', 'scan.user_id')
             ->orderByDesc('scan.analyzed_at')
-            ->limit(self::SOURCE_LIMIT)
+            ->limit($this->sourceLimit())
             ->get([
                 'scan.id as scan_id',
                 'scan.tracked_person_id',
