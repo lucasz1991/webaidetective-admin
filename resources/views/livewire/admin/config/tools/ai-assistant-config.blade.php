@@ -11,7 +11,7 @@
             @endif
 
             <div class="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-                Konfiguriert den AI-Assistenten im Frontend. Der Anbieter-API-Key wird verschluesselt in der gemeinsamen settings-Tabelle gespeichert und nicht wieder im Formular angezeigt.
+                Konfiguriert den AI-Assistenten im Frontend. Der Anbieter-API-Key wird mit Laravel Crypt verschluesselt in der gemeinsamen settings-Tabelle gespeichert und nicht wieder im Formular angezeigt. Admin und Frontend muessen denselben APP_KEY verwenden.
             </div>
 
             <form wire:submit.prevent="saveSettings" class="space-y-5">
