@@ -68,6 +68,14 @@
                 >
                     AI-Assistent
                 </button>
+                <button
+                    type="button"
+                    class="whitespace-nowrap border-b-2 px-1 pb-4 text-sm font-medium"
+                    :class="{ 'border-blue-500 text-blue-600': activeTab === 'aiAudio', 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700': activeTab !== 'aiAudio' }"
+                    @click="activeTab = 'aiAudio'"
+                >
+                    AI-Audio
+                </button>
             </nav>
         </div>
 
@@ -131,6 +139,15 @@
                     </p>
                     <button type="button" @click="activeTab = 'aiAssistant'" class="mt-3 text-sm font-medium text-blue-600">
                         AI-Assistent oeffnen
+                    </button>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <h3 class="text-lg font-semibold text-gray-700">AI-Audio</h3>
+                    <p class="mt-2 text-sm text-gray-600">
+                        Modelle fuer Speech-to-Text und Text-to-Speech zentral verwalten.
+                    </p>
+                    <button type="button" @click="activeTab = 'aiAudio'" class="mt-3 text-sm font-medium text-blue-600">
+                        AI-Audio oeffnen
                     </button>
                 </div>
                 <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -271,6 +288,11 @@
         <div x-show="activeTab === 'aiAssistant'" x-cloak class="space-y-6" x-collapse.duration.300ms>
             <h2 class="text-2xl font-semibold">AI-Assistent</h2>
             @livewire('admin.config.tools.ai-assistant-config')
+        </div>
+
+        <div x-show="activeTab === 'aiAudio'" x-cloak class="space-y-6" x-collapse.duration.300ms>
+            <h2 class="text-2xl font-semibold">AI-Audio</h2>
+            @livewire('admin.config.tools.audio-assistant-config')
         </div>
     </div>
 </div>
