@@ -55,6 +55,14 @@
                 <button
                     type="button"
                     class="whitespace-nowrap border-b-2 px-1 pb-4 text-sm font-medium"
+                    :class="{ 'border-blue-500 text-blue-600': activeTab === 'scans', 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700': activeTab !== 'scans' }"
+                    @click="activeTab = 'scans'"
+                >
+                    Scans
+                </button>
+                <button
+                    type="button"
+                    class="whitespace-nowrap border-b-2 px-1 pb-4 text-sm font-medium"
                     :class="{ 'border-blue-500 text-blue-600': activeTab === 'aiAssistant', 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700': activeTab !== 'aiAssistant' }"
                     @click="activeTab = 'aiAssistant'"
                 >
@@ -123,6 +131,15 @@
                     </p>
                     <button type="button" @click="activeTab = 'aiAssistant'" class="mt-3 text-sm font-medium text-blue-600">
                         AI-Assistent oeffnen
+                    </button>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <h3 class="text-lg font-semibold text-gray-700">Scan-Steuerung</h3>
+                    <p class="mt-2 text-sm text-gray-600">
+                        Wiederholungen, Limits und die Behandlung bereits gepruefter Kandidaten zentral festlegen.
+                    </p>
+                    <button type="button" @click="activeTab = 'scans'" class="mt-3 text-sm font-medium text-blue-600">
+                        Scan-Einstellungen oeffnen
                     </button>
                 </div>
             </div>
@@ -244,6 +261,11 @@
         <div x-show="activeTab === 'scraper'" x-cloak class="space-y-6" x-collapse.duration.300ms>
             <h2 class="text-2xl font-semibold">Scraper-Einstellungen</h2>
             @livewire('admin.config.scraper-settings')
+        </div>
+
+        <div x-show="activeTab === 'scans'" x-cloak class="space-y-6" x-collapse.duration.300ms>
+            <h2 class="text-2xl font-semibold">Scan-Einstellungen</h2>
+            @livewire('admin.config.scan-settings')
         </div>
 
         <div x-show="activeTab === 'aiAssistant'" x-cloak class="space-y-6" x-collapse.duration.300ms>
