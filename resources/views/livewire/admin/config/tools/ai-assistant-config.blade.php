@@ -11,7 +11,7 @@
             @endif
 
             <div class="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-                Konfiguriert den AI-Assistenten im Frontend. Der API-Key wird verschluesselt gespeichert und nicht wieder im Formular angezeigt.
+                Konfiguriert den AI-Assistenten im Frontend. Der Anbieter-API-Key wird verschluesselt in der gemeinsamen settings-Tabelle gespeichert und nicht wieder im Formular angezeigt.
             </div>
 
             <form wire:submit.prevent="saveSettings" class="space-y-5">
@@ -73,6 +73,9 @@
                                 </button>
                             @endif
                         </div>
+                        @if($apiKeyError)
+                            <p class="mt-2 text-xs font-semibold text-red-600">{{ $apiKeyError }}</p>
+                        @endif
                         @error('apiKeyInput') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                     </div>
                 </div>
