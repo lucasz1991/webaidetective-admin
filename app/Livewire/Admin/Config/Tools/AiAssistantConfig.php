@@ -25,7 +25,7 @@ class AiAssistantConfig extends Component
         $this->status = (bool) Setting::getValue('ai_assistant', 'status');
         $this->assistantName = (string) (Setting::getValue('ai_assistant', 'assistant_name') ?? '');
         $this->apiUrl = (string) (Setting::getValue('ai_assistant', 'api_url') ?? '');
-        $this->apiKeyConfigured = $this->ensureEncryptedApiKey();
+        $this->apiKeyConfigured = $this->normalizeStoredApiKey();
         $this->aiModel = (string) (Setting::getValue('ai_assistant', 'ai_model') ?? '');
         $this->modelTitle = (string) (Setting::getValue('ai_assistant', 'model_title') ?? '');
         $this->refererUrl = (string) (Setting::getValue('ai_assistant', 'referer_url') ?? '');
@@ -56,13 +56,8 @@ class AiAssistantConfig extends Component
 
             if (filled($validated['apiKeyInput'] ?? null)) {
                 $plainText = trim($validated['apiKeyInput']);
-                $encrypted = Crypt::encryptString($plainText);
-                Setting::setValue('ai_assistant', 'api_key', $encrypted);
-
-                $stored = Setting::getValue('ai_assistant', 'api_key');
-                $roundTrip = is_string($stored)
-                    ? trim(Crypt::decryptString($stored))
-                    : '';
+                Setting::setValue('ai_assistant', 'api_key', $plainText);
+                $roundTrip = trim((string) (Setting::getValue('ai_assistant', 'api_key') ?? ''));
 
                 if (! hash_equals($plainText, $roundTrip)) {
                     throw new \RuntimeException('Der AI API-Key konnte nach dem Speichern nicht verifiziert werden.');
@@ -89,7 +84,7 @@ class AiAssistantConfig extends Component
         session()->flash('success', 'AI API-Key wurde entfernt.');
     }
 
-    private function ensureEncryptedApiKey(): bool
+    private function normalizeStoredApiKey(): bool
     {
         $value = Setting::getValue('ai_assistant', 'api_key');
 
@@ -97,8 +92,20 @@ class AiAssistantConfig extends Component
             return false;
         }
 
+        $value = trim($value);
+
+        if (! $this->looksLikeLaravelEncryptedValue($value)) {
+            return true;
+        }
+
         try {
-            Crypt::decryptString($value);
+            $plainText = trim(Crypt::decryptString($value));
+
+            if ($plainText === '') {
+                return false;
+            }
+
+            Setting::setValue('ai_assistant', 'api_key', $plainText);
 
             return true;
         } catch (\Throwable) {
@@ -106,6 +113,20 @@ class AiAssistantConfig extends Component
 
             return false;
         }
+    }
+
+    private function looksLikeLaravelEncryptedValue(string $value): bool
+    {
+        $decoded = base64_decode($value, true);
+
+        if (! is_string($decoded)) {
+            return false;
+        }
+
+        $payload = json_decode($decoded, true);
+
+        return is_array($payload)
+            && isset($payload['iv'], $payload['value'], $payload['mac']);
     }
 
     public function render()

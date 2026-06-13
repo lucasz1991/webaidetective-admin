@@ -11,7 +11,7 @@
             @endif
 
             <div class="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-                Konfiguriert den AI-Assistenten im Frontend. Der Anbieter-API-Key wird mit Laravel Crypt verschluesselt in der gemeinsamen settings-Tabelle gespeichert und nicht wieder im Formular angezeigt. Admin und Frontend muessen denselben APP_KEY verwenden.
+                Konfiguriert den AI-Assistenten im Frontend. Der Anbieter-API-Key wird in der gemeinsamen settings-Tabelle gespeichert und nicht wieder im Formular angezeigt. Admin und Frontend koennen unterschiedliche APP_KEYs verwenden.
             </div>
 
             <form wire:submit.prevent="saveSettings" class="space-y-5">
@@ -66,7 +66,7 @@
                         <label for="ai-assistant-api-key" class="block text-sm font-medium text-gray-700">API Key</label>
                         <input id="ai-assistant-api-key" type="password" wire:model.defer="apiKeyInput" autocomplete="new-password" placeholder="{{ $apiKeyConfigured ? 'Neuen Key eingeben, um bestehenden zu ersetzen' : 'API-Key hinterlegen' }}" class="mt-1 w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
                         <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
-                            <span>{{ $apiKeyConfigured ? 'API-Key ist verschluesselt gespeichert.' : 'Noch kein API-Key gespeichert.' }}</span>
+                            <span>{{ $apiKeyConfigured ? 'API-Key ist gespeichert.' : 'Noch kein API-Key gespeichert.' }}</span>
                             @if($apiKeyConfigured)
                                 <button type="button" wire:click="clearApiKey" class="font-semibold text-red-600 hover:text-red-700">
                                     Key entfernen
