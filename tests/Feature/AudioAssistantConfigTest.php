@@ -18,6 +18,9 @@ class AudioAssistantConfigTest extends TestCase
         $this->assertStringContainsString('/api/v1/audio/speech', $component);
         $this->assertStringContainsString('wire:submit.prevent="saveSettings"', $view);
         $this->assertStringContainsString('Output-Modalitaet', $view);
+        $this->assertStringContainsString('x-ai/grok-voice-tts-1.0', $view);
+        $this->assertStringContainsString('requiresPcmFormat', $component);
+        $this->assertStringContainsString('browserkompatibles WAV', $view);
         $this->assertStringContainsString("@livewire('admin.config.tools.audio-assistant-config')", $adminConfig);
     }
 }

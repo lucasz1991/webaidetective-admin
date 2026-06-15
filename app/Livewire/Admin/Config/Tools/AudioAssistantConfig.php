@@ -44,6 +44,13 @@ class AudioAssistantConfig extends Component
         ]);
 
         $audioOutputApiUrl = trim((string) ($validated['audioOutputApiUrl'] ?? ''));
+        $audioOutputModel = trim((string) ($validated['audioOutputModel'] ?? ''));
+        $audioOutputFormat = (string) ($validated['audioOutputFormat'] ?? 'mp3');
+
+        if ($this->requiresPcmFormat($audioOutputModel)) {
+            $audioOutputFormat = 'pcm';
+            $this->audioOutputFormat = 'pcm';
+        }
 
         if ($audioOutputApiUrl !== '' && ! $this->isOpenRouterSpeechUrl($audioOutputApiUrl)) {
             $this->addError(
@@ -62,7 +69,7 @@ class AudioAssistantConfig extends Component
         Setting::setValue(
             'ai_assistant',
             'audio_output_model',
-            trim((string) ($validated['audioOutputModel'] ?? '')),
+            $audioOutputModel,
         );
         Setting::setValue(
             'ai_assistant',
@@ -77,7 +84,7 @@ class AudioAssistantConfig extends Component
         Setting::setValue(
             'ai_assistant',
             'audio_output_format',
-            (string) ($validated['audioOutputFormat'] ?? 'mp3'),
+            $audioOutputFormat,
         );
 
         $this->dispatch('showAlert', 'OpenRouter-Audio-Einstellungen wurden gespeichert.', 'success');
@@ -100,6 +107,13 @@ class AudioAssistantConfig extends Component
         $path = '/'.trim((string) parse_url($url, PHP_URL_PATH), '/');
 
         return $this->isOpenRouterUrl($url) && $path === '/api/v1/audio/speech';
+    }
+
+    private function requiresPcmFormat(string $model): bool
+    {
+        $model = Str::lower($model);
+
+        return Str::startsWith($model, 'google/') && Str::contains($model, 'tts');
     }
 
     public function render()

@@ -38,11 +38,11 @@
                             id="ai-audio-output-model"
                             type="text"
                             wire:model.defer="audioOutputModel"
-                            placeholder="z. B. provider/tts-model-id"
+                            placeholder="z. B. x-ai/grok-voice-tts-1.0"
                             class="mt-1 w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         >
                         <p class="mt-2 text-xs text-gray-500">
-                            Modell-ID, die OpenRouter fuer Text-to-Speech/Audio-Ausgabe akzeptiert. Das konkrete Modell muss Audio-Speech beim Provider unterstuetzen.
+                            Modell-ID, die OpenRouter fuer Text-to-Speech akzeptiert. Fuer deutsche MP3-Ausgabe kann beispielsweise <code class="rounded bg-white px-1 py-0.5">x-ai/grok-voice-tts-1.0</code> verwendet werden.
                         </p>
                         @error('audioOutputModel')
                             <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
@@ -87,11 +87,11 @@
                                     id="ai-audio-output-voice"
                                     type="text"
                                     wire:model.defer="audioOutputVoice"
-                                    placeholder="z. B. alloy, nova, shimmer oder Provider-Voice-ID"
+                                    placeholder="z. B. Eve, Ara, Rex, Sal oder Leo"
                                     class="mt-1 w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 >
                                 <p class="mt-2 text-xs text-gray-500">
-                                    Voice-ID des ueber OpenRouter gerouteten TTS-Anbieters. Wenn leer, sendet die Base <code class="rounded bg-white px-1 py-0.5">alloy</code> als Standard.
+                                    Voice-ID des TTS-Anbieters. Fuer <code class="rounded bg-white px-1 py-0.5">x-ai/grok-voice-tts-1.0</code> sind beispielsweise Eve, Ara, Rex, Sal und Leo verfuegbar.
                                 </p>
                                 @error('audioOutputVoice')
                                     <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
@@ -113,7 +113,7 @@
                                     <option value="pcm">PCM / audio/pcm</option>
                                 </select>
                                 <p class="mt-2 text-xs text-gray-500">
-                                    Fuer den Browser-Audiostream ist <code class="rounded bg-white px-1 py-0.5">mp3</code> am kompatibelsten. Das Format muss vom OpenRouter-Modell/Provider unterstuetzt werden.
+                                    Gemini-TTS wird beim Speichern automatisch auf PCM gesetzt und von der Base als browserkompatibles WAV ausgeliefert. Fuer xAI ist MP3 geeignet.
                                 </p>
                                 @error('audioOutputFormat')
                                     <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
