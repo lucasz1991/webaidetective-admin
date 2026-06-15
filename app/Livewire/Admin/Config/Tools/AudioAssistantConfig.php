@@ -45,11 +45,14 @@ class AudioAssistantConfig extends Component
 
         $audioOutputApiUrl = trim((string) ($validated['audioOutputApiUrl'] ?? ''));
         $audioOutputModel = trim((string) ($validated['audioOutputModel'] ?? ''));
+        $audioOutputVoice = trim((string) ($validated['audioOutputVoice'] ?? ''));
         $audioOutputFormat = (string) ($validated['audioOutputFormat'] ?? 'mp3');
 
         if ($this->requiresPcmFormat($audioOutputModel)) {
             $audioOutputFormat = 'pcm';
             $this->audioOutputFormat = 'pcm';
+            $audioOutputVoice = $this->geminiVoice($audioOutputVoice);
+            $this->audioOutputVoice = $audioOutputVoice;
         }
 
         if ($audioOutputApiUrl !== '' && ! $this->isOpenRouterSpeechUrl($audioOutputApiUrl)) {
@@ -79,7 +82,7 @@ class AudioAssistantConfig extends Component
         Setting::setValue(
             'ai_assistant',
             'audio_output_voice',
-            trim((string) ($validated['audioOutputVoice'] ?? '')),
+            $audioOutputVoice,
         );
         Setting::setValue(
             'ai_assistant',
@@ -114,6 +117,18 @@ class AudioAssistantConfig extends Component
         $model = Str::lower($model);
 
         return Str::startsWith($model, 'google/') && Str::contains($model, 'tts');
+    }
+
+    private function geminiVoice(string $voice): string
+    {
+        if (
+            $voice === ''
+            || in_array(Str::lower($voice), ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'], true)
+        ) {
+            return 'Kore';
+        }
+
+        return $voice;
     }
 
     public function render()

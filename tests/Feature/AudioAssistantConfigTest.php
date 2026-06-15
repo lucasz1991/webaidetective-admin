@@ -20,6 +20,8 @@ class AudioAssistantConfigTest extends TestCase
         $this->assertStringContainsString('Output-Modalitaet', $view);
         $this->assertStringContainsString('x-ai/grok-voice-tts-1.0', $view);
         $this->assertStringContainsString('requiresPcmFormat', $component);
+        $this->assertStringContainsString('geminiVoice', $component);
+        $this->assertStringContainsString('Kore', $view);
         $this->assertStringContainsString('browserkompatibles WAV', $view);
         $this->assertStringContainsString("@livewire('admin.config.tools.audio-assistant-config')", $adminConfig);
     }

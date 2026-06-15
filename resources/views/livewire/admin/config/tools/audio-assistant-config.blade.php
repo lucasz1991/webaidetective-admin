@@ -87,11 +87,11 @@
                                     id="ai-audio-output-voice"
                                     type="text"
                                     wire:model.defer="audioOutputVoice"
-                                    placeholder="z. B. Eve, Ara, Rex, Sal oder Leo"
+                                    placeholder="z. B. Kore (Gemini) oder Eve (xAI)"
                                     class="mt-1 w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 >
                                 <p class="mt-2 text-xs text-gray-500">
-                                    Voice-ID des TTS-Anbieters. Fuer <code class="rounded bg-white px-1 py-0.5">x-ai/grok-voice-tts-1.0</code> sind beispielsweise Eve, Ara, Rex, Sal und Leo verfuegbar.
+                                    Voice-ID des TTS-Anbieters. Gemini verwendet beispielsweise Kore oder Puck; fuer <code class="rounded bg-white px-1 py-0.5">x-ai/grok-voice-tts-1.0</code> sind Eve, Ara, Rex, Sal und Leo verfuegbar.
                                 </p>
                                 @error('audioOutputVoice')
                                     <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
