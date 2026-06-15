@@ -3,10 +3,13 @@
 namespace App\Livewire\Admin\Config\Tools;
 
 use App\Models\Setting;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class AudioAssistantConfig extends Component
 {
+    private const OPENROUTER_AUDIO_SPEECH_URL = 'https://openrouter.ai/api/v1/audio/speech';
+
     public string $audioInputModel = '';
 
     public string $audioOutputModel = '';
@@ -40,6 +43,14 @@ class AudioAssistantConfig extends Component
             'audioOutputFormat' => ['required', 'in:mp3,opus,wav,pcm'],
         ]);
 
+        $audioOutputApiUrl = trim((string) ($validated['audioOutputApiUrl'] ?? ''));
+
+        if ($audioOutputApiUrl !== '' && ! $this->isOpenRouterUrl($audioOutputApiUrl)) {
+            $this->addError('audioOutputApiUrl', 'Die Audio-Ausgabe soll ueber OpenRouter laufen. Bitte eine OpenRouter-URL verwenden oder das Feld leer lassen.');
+
+            return;
+        }
+
         Setting::setValue(
             'ai_assistant',
             'audio_input_model',
@@ -53,7 +64,7 @@ class AudioAssistantConfig extends Component
         Setting::setValue(
             'ai_assistant',
             'audio_output_api_url',
-            trim((string) ($validated['audioOutputApiUrl'] ?? '')),
+            $audioOutputApiUrl,
         );
         Setting::setValue(
             'ai_assistant',
@@ -66,7 +77,19 @@ class AudioAssistantConfig extends Component
             (string) ($validated['audioOutputFormat'] ?? 'mp3'),
         );
 
-        $this->dispatch('showAlert', 'AI-Audio-Einstellungen wurden gespeichert.', 'success');
+        $this->dispatch('showAlert', 'OpenRouter-Audio-Einstellungen wurden gespeichert.', 'success');
+    }
+
+    public function openRouterAudioSpeechUrl(): string
+    {
+        return self::OPENROUTER_AUDIO_SPEECH_URL;
+    }
+
+    private function isOpenRouterUrl(string $url): bool
+    {
+        $host = Str::lower((string) parse_url($url, PHP_URL_HOST));
+
+        return $host === 'openrouter.ai' || Str::endsWith($host, '.openrouter.ai');
     }
 
     public function render()
