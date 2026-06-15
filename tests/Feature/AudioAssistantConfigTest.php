@@ -14,7 +14,10 @@ class AudioAssistantConfigTest extends TestCase
 
         $this->assertStringContainsString("'audio_input_model'", $component);
         $this->assertStringContainsString("'audio_output_model'", $component);
+        $this->assertStringContainsString('isOpenRouterSpeechUrl', $component);
+        $this->assertStringContainsString('/api/v1/audio/speech', $component);
         $this->assertStringContainsString('wire:submit.prevent="saveSettings"', $view);
+        $this->assertStringContainsString('Output-Modalitaet', $view);
         $this->assertStringContainsString("@livewire('admin.config.tools.audio-assistant-config')", $adminConfig);
     }
 }

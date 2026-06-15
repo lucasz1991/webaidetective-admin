@@ -45,8 +45,11 @@ class AudioAssistantConfig extends Component
 
         $audioOutputApiUrl = trim((string) ($validated['audioOutputApiUrl'] ?? ''));
 
-        if ($audioOutputApiUrl !== '' && ! $this->isOpenRouterUrl($audioOutputApiUrl)) {
-            $this->addError('audioOutputApiUrl', 'Die Audio-Ausgabe soll ueber OpenRouter laufen. Bitte eine OpenRouter-URL verwenden oder das Feld leer lassen.');
+        if ($audioOutputApiUrl !== '' && ! $this->isOpenRouterSpeechUrl($audioOutputApiUrl)) {
+            $this->addError(
+                'audioOutputApiUrl',
+                'Bitte exakt den OpenRouter Speech-Endpoint https://openrouter.ai/api/v1/audio/speech verwenden oder das Feld leer lassen.',
+            );
 
             return;
         }
@@ -90,6 +93,13 @@ class AudioAssistantConfig extends Component
         $host = Str::lower((string) parse_url($url, PHP_URL_HOST));
 
         return $host === 'openrouter.ai' || Str::endsWith($host, '.openrouter.ai');
+    }
+
+    private function isOpenRouterSpeechUrl(string $url): bool
+    {
+        $path = '/'.trim((string) parse_url($url, PHP_URL_PATH), '/');
+
+        return $this->isOpenRouterUrl($url) && $path === '/api/v1/audio/speech';
     }
 
     public function render()

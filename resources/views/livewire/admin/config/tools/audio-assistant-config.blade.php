@@ -71,7 +71,7 @@
                                 class="mt-1 w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
                             >
                             <p class="mt-2 text-xs text-gray-500">
-                                Nur OpenRouter-URLs sind erlaubt. Leer lassen, wenn die Base automatisch den OpenRouter-Standard verwenden soll.
+                                Erlaubt ist nur <code class="rounded bg-white px-1 py-0.5">{{ $this->openRouterAudioSpeechUrl() }}</code>. Leer lassen, wenn die Base automatisch den OpenRouter-Standard verwenden soll.
                             </p>
                             @error('audioOutputApiUrl')
                                 <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
@@ -124,7 +124,7 @@
                 </div>
 
                 <div class="rounded-md border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">
-                    Wichtig: OpenRouter muss fuer das eingetragene Audio-Modell einen kompatiblen Audio-Speech/TTS-Endpoint anbieten. Falls OpenRouter fuer das Modell kein Audio zurueckliefert, zeigt die Base-Audioausgabe die Fehlermeldung des OpenRouter-Endpunkts an.
+                    Wichtig: Das Chat-Modell ist normalerweise kein TTS-Modell. Trage hier ein Modell ein, das bei OpenRouter die Output-Modalitaet <code class="rounded bg-white px-1 py-0.5">speech</code> unterstuetzt.
                 </div>
 
                 <div class="flex justify-end">
