@@ -5,14 +5,20 @@ namespace App\Livewire\Admin\Dashboard;
 use App\Support\PublicAssetUrl;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
+use Symfony\Component\Process\Process;
 
 class ScanMonitor extends Component
 {
     private const SOURCE_LIMIT = 30;
 
     private const RUNNING_WINDOW_HOURS = 6;
+
+    private const SCRAPER_PROCESS_IDLE_MINUTES = 15;
+
+    private const SCRAPER_PROCESS_LOW_CPU_PERCENT = 0.5;
 
     private ?string $assetBaseUrl = null;
 
@@ -22,10 +28,15 @@ class ScanMonitor extends Component
 
     public bool $showLoadMore = false;
 
-    public function mount(int $displayLimit = 4, bool $showLoadMore = false): void
+    public bool $loadAllSources = false;
+
+    public ?string $processNotice = null;
+
+    public function mount(int $displayLimit = 4, bool $showLoadMore = false, bool $loadAllSources = false): void
     {
         $this->displayLimit = max(1, min(100, $displayLimit));
         $this->showLoadMore = $showLoadMore;
+        $this->loadAllSources = $loadAllSources;
     }
 
     public function loadMore(): void
@@ -48,8 +59,60 @@ class ScanMonitor extends Component
         return view('livewire.admin.dashboard.scan-monitor', [
             'scans' => $loadedScans->take($this->displayLimit)->values(),
             'hasMore' => $this->showLoadMore && $loadedScans->count() > $this->displayLimit,
+            'scraperProcesses' => $this->loadScraperProcesses(),
             'tablesAvailable' => $tablesAvailable,
         ]);
+    }
+
+    public function terminateScraperProcess(int $pid, bool $force = false): void
+    {
+        $pid = (int) $pid;
+
+        if ($pid <= 1) {
+            $this->processNotice = 'Ungueltige Prozess-ID.';
+
+            return;
+        }
+
+        $command = $this->commandForProcess($pid);
+
+        if (! $command || ! $this->isInstagramScraperProcessCommand($command)) {
+            $this->processNotice = 'Der Prozess wurde nicht beendet, weil er kein erkannter Instagram-Scraper-Prozess ist.';
+
+            return;
+        }
+
+        $signal = $force ? 'KILL' : 'TERM';
+        $process = new Process(['kill', '-'.$signal, (string) $pid]);
+        $process->setTimeout(5);
+
+        try {
+            $process->run();
+        } catch (\Throwable $error) {
+            Log::warning('Instagram scraper process termination failed.', [
+                'pid' => $pid,
+                'signal' => $signal,
+                'error' => $error->getMessage(),
+            ]);
+
+            $this->processNotice = 'Prozess konnte nicht beendet werden: '.$error->getMessage();
+
+            return;
+        }
+
+        if (! $process->isSuccessful()) {
+            $this->processNotice = 'Prozess konnte nicht beendet werden: '.trim($process->getErrorOutput() ?: $process->getOutput());
+
+            return;
+        }
+
+        Log::warning('Instagram scraper process terminated from admin scan monitor.', [
+            'pid' => $pid,
+            'signal' => $signal,
+            'command' => $command,
+        ]);
+
+        $this->processNotice = 'Scraper-Prozess '.$pid.' wurde mit SIG'.$signal.' beendet.';
     }
 
     private function loadScans(): Collection
@@ -74,12 +137,147 @@ class ScanMonitor extends Component
         return $scans->values();
     }
 
-    private function sourceLimit(): int
+    private function sourceLimit(): ?int
     {
+        if ($this->loadAllSources) {
+            return null;
+        }
+
         return max(
             self::SOURCE_LIMIT,
             $this->displayLimit + ($this->showLoadMore ? 1 : 0),
         );
+    }
+
+    private function applySourceLimit(\Illuminate\Database\Query\Builder $query): \Illuminate\Database\Query\Builder
+    {
+        $sourceLimit = $this->sourceLimit();
+
+        return $sourceLimit === null ? $query : $query->limit($sourceLimit);
+    }
+
+    private function loadScraperProcesses(): Collection
+    {
+        $process = Process::fromShellCommandline('ps -axo pid=,ppid=,etime=,stat=,pcpu=,pmem=,command=');
+        $process->setTimeout(5);
+
+        try {
+            $process->run();
+        } catch (\Throwable $error) {
+            Log::warning('Unable to inspect system processes for scraper monitor.', [
+                'error' => $error->getMessage(),
+            ]);
+
+            return collect();
+        }
+
+        if (! $process->isSuccessful()) {
+            Log::warning('System process inspection failed for scraper monitor.', [
+                'error' => trim($process->getErrorOutput() ?: $process->getOutput()),
+            ]);
+
+            return collect();
+        }
+
+        return collect(preg_split('/\R/u', trim($process->getOutput())) ?: [])
+            ->map(fn (string $line): ?object => $this->parseProcessLine($line))
+            ->filter(fn (?object $entry): bool => $entry !== null && $this->isInstagramScraperProcessCommand($entry->command))
+            ->sortByDesc(fn (object $entry): int => $entry->elapsed_seconds)
+            ->values();
+    }
+
+    private function parseProcessLine(string $line): ?object
+    {
+        if (! preg_match('/^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s+([0-9.]+)\s+([0-9.]+)\s+(.+)$/u', $line, $matches)) {
+            return null;
+        }
+
+        $elapsedSeconds = $this->parseProcessElapsedSeconds($matches[3]);
+        $cpu = (float) $matches[5];
+        $ageMinutes = (int) floor($elapsedSeconds / 60);
+
+        return (object) [
+            'pid' => (int) $matches[1],
+            'parent_pid' => (int) $matches[2],
+            'elapsed' => $matches[3],
+            'elapsed_seconds' => $elapsedSeconds,
+            'age_minutes' => $ageMinutes,
+            'state' => $matches[4],
+            'cpu' => $cpu,
+            'memory' => (float) $matches[6],
+            'command' => trim($matches[7]),
+            'short_command' => $this->shortenProcessCommand(trim($matches[7])),
+            'is_idle_suspect' => $ageMinutes >= self::SCRAPER_PROCESS_IDLE_MINUTES
+                && $cpu <= self::SCRAPER_PROCESS_LOW_CPU_PERCENT,
+        ];
+    }
+
+    private function parseProcessElapsedSeconds(string $elapsed): int
+    {
+        $days = 0;
+        $time = $elapsed;
+
+        if (str_contains($elapsed, '-')) {
+            [$dayPart, $time] = explode('-', $elapsed, 2);
+            $days = max(0, (int) $dayPart);
+        }
+
+        $parts = array_map('intval', explode(':', $time));
+
+        if (count($parts) === 2) {
+            [$minutes, $seconds] = $parts;
+
+            return ($days * 86400) + ($minutes * 60) + $seconds;
+        }
+
+        if (count($parts) === 3) {
+            [$hours, $minutes, $seconds] = $parts;
+
+            return ($days * 86400) + ($hours * 3600) + ($minutes * 60) + $seconds;
+        }
+
+        return $days * 86400;
+    }
+
+    private function commandForProcess(int $pid): ?string
+    {
+        $process = new Process(['ps', '-p', (string) $pid, '-o', 'command=']);
+        $process->setTimeout(5);
+
+        try {
+            $process->run();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! $process->isSuccessful()) {
+            return null;
+        }
+
+        $command = trim($process->getOutput());
+
+        return $command !== '' ? $command : null;
+    }
+
+    private function isInstagramScraperProcessCommand(string $command): bool
+    {
+        $normalized = strtolower($command);
+
+        return str_contains($normalized, 'node')
+            && (
+                str_contains($normalized, 'resources/node/scraper/')
+                || (bool) preg_match('/(?:^|\s|\/)scrape-instagram(?:-[a-z0-9-]+)?\.cjs(?:\s|$)/i', $command)
+            );
+    }
+
+    private function shortenProcessCommand(string $command): string
+    {
+        $command = preg_replace('#/Users/[^/\s]+/#', '~/', $command) ?: $command;
+        $command = preg_replace('#\s+#', ' ', $command) ?: $command;
+
+        return mb_strlen($command) > 180
+            ? mb_substr($command, 0, 177).'...'
+            : $command;
     }
 
     private function loadRunningTrackedPersonScans(): Collection
@@ -126,11 +324,12 @@ class ScanMonitor extends Component
                 DB::raw('NULL as raw_payload'),
             ];
 
-        return $query
+        $query
             ->where('tracked_people.last_instagram_status_level', 'partial')
             ->where('tracked_people.updated_at', '>=', now()->subHours(self::RUNNING_WINDOW_HOURS))
-            ->orderByDesc('tracked_people.updated_at')
-            ->limit($this->sourceLimit())
+            ->orderByDesc('tracked_people.updated_at');
+
+        return $this->applySourceLimit($query)
             ->get([
                 'tracked_people.id as tracked_person_id',
                 $profileIdColumn,
@@ -206,11 +405,12 @@ class ScanMonitor extends Component
                 ? 'tracked_people.current_instagram_profile_id'
                 : DB::raw('NULL as instagram_profile_id'));
 
-        return DB::table('tracked_person_instagram_snapshots as snapshot')
+        $query = DB::table('tracked_person_instagram_snapshots as snapshot')
             ->join('tracked_people', 'tracked_people.id', '=', 'snapshot.tracked_person_id')
             ->leftJoin('users', 'users.id', '=', 'tracked_people.user_id')
-            ->orderByDesc('snapshot.analyzed_at')
-            ->limit($this->sourceLimit())
+            ->orderByDesc('snapshot.analyzed_at');
+
+        return $this->applySourceLimit($query)
             ->get([
                 'snapshot.id as snapshot_id',
                 'snapshot.tracked_person_id',
@@ -294,9 +494,9 @@ class ScanMonitor extends Component
             $query->whereNull('scan.deleted_at');
         }
 
-        return $query
-            ->orderByDesc('scan.scanned_at')
-            ->limit($this->sourceLimit())
+        $query->orderByDesc('scan.scanned_at');
+
+        return $this->applySourceLimit($query)
             ->get([
                 'scan.id as scan_id',
                 'scan.snapshot_id',
@@ -368,12 +568,13 @@ class ScanMonitor extends Component
             return collect();
         }
 
-        return DB::table('instagram_post_scans as scan')
+        $query = DB::table('instagram_post_scans as scan')
             ->join('instagram_profiles as profile', 'profile.id', '=', 'scan.instagram_profile_id')
             ->leftJoin('tracked_people', 'tracked_people.id', '=', 'scan.tracked_person_id')
             ->leftJoin('users', 'users.id', '=', 'scan.user_id')
-            ->orderByDesc('scan.scanned_at')
-            ->limit($this->sourceLimit())
+            ->orderByDesc('scan.scanned_at');
+
+        return $this->applySourceLimit($query)
             ->get([
                 'scan.id as scan_id',
                 'scan.snapshot_id',
@@ -441,11 +642,12 @@ class ScanMonitor extends Component
             ? 'tracked_people.current_instagram_profile_id as instagram_profile_id'
             : DB::raw('NULL as instagram_profile_id');
 
-        return DB::table('tracked_person_instagram_suggestion_scans as scan')
+        $query = DB::table('tracked_person_instagram_suggestion_scans as scan')
             ->join('tracked_people', 'tracked_people.id', '=', 'scan.tracked_person_id')
             ->leftJoin('users', 'users.id', '=', 'scan.user_id')
-            ->orderByDesc('scan.analyzed_at')
-            ->limit($this->sourceLimit())
+            ->orderByDesc('scan.analyzed_at');
+
+        return $this->applySourceLimit($query)
             ->get([
                 'scan.id as scan_id',
                 'scan.tracked_person_id',
@@ -509,11 +711,12 @@ class ScanMonitor extends Component
             ? 'tracked_people.current_instagram_profile_id as instagram_profile_id'
             : DB::raw('NULL as instagram_profile_id');
 
-        return DB::table('tracked_person_instagram_public_profile_scans as scan')
+        $query = DB::table('tracked_person_instagram_public_profile_scans as scan')
             ->join('tracked_people', 'tracked_people.id', '=', 'scan.tracked_person_id')
             ->leftJoin('users', 'users.id', '=', 'scan.user_id')
-            ->orderByDesc('scan.analyzed_at')
-            ->limit($this->sourceLimit())
+            ->orderByDesc('scan.analyzed_at');
+
+        return $this->applySourceLimit($query)
             ->get([
                 'scan.id as scan_id',
                 'scan.tracked_person_id',

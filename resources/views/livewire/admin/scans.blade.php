@@ -22,5 +22,5 @@
         </div>
     </section>
 
-    <livewire:admin.dashboard.scan-monitor :display-limit="100" :show-load-more="true" />
+    <livewire:admin.dashboard.scan-monitor :display-limit="100" :show-load-more="true" :load-all-sources="true" />
 </div>
