@@ -16,6 +16,49 @@
                 <input type="number" min="60" wire:model.defer="policies.global.node_watchdog_timeout_seconds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 @error('policies.global.node_watchdog_timeout_seconds') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
             </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Navigation-Timeout je Instagram-Seite in Sekunden</label>
+                <input type="number" min="30" max="3600" wire:model.defer="policies.global.navigation_timeout_seconds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                @error('policies.global.navigation_timeout_seconds') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Extra-Versuche bei Scraper-Profilwechsel</label>
+                <input type="number" min="0" max="10" wire:model.defer="policies.global.profile_switch_extra_attempts" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                <p class="mt-1 text-xs text-gray-500">Wird genutzt, wenn ein Profil wegen Rate-Limit/Challenge blockiert wurde.</p>
+                @error('policies.global.profile_switch_extra_attempts') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Wartezeit nach Login in ms</label>
+                <input type="number" min="500" max="60000" wire:model.defer="policies.global.post_login_wait_ms" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                @error('policies.global.post_login_wait_ms') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Tipp-Verzoegerung beim Login in ms</label>
+                <input type="number" min="0" max="1000" wire:model.defer="policies.global.typing_delay_ms" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                @error('policies.global.typing_delay_ms') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+        </div>
+        <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <label class="flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+                <input type="checkbox" wire:model="policies.global.script_watchdog_enabled" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <span class="text-sm font-medium text-gray-800">Node-Watchdog aktiv</span>
+            </label>
+            <label class="flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+                <input type="checkbox" wire:model="policies.global.browser_disconnect_abort" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <span class="text-sm font-medium text-gray-800">Bei Browser-/Puppeteer-Abbruch Scan stoppen</span>
+            </label>
+            <label class="flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+                <input type="checkbox" wire:model="policies.global.live_preview_enabled" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <span class="text-sm font-medium text-gray-800">Live-Preview-Screenshots aktiv</span>
+            </label>
+            <label class="flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+                <input type="checkbox" wire:model="policies.global.skip_debug_artifacts" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <span class="text-sm font-medium text-gray-800">Debug-HTML-Artefakte nicht speichern</span>
+            </label>
+            <label class="flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+                <input type="checkbox" wire:model="policies.global.block_heavy_resources" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <span class="text-sm font-medium text-gray-800">Bilder/Medien/Fonts im Browser blockieren</span>
+            </label>
         </div>
     </div>
 
@@ -71,6 +114,48 @@
                         <input type="number" min="20" wire:model.defer="policies.lists.max_scroll_rounds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
                 </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <label class="flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 p-3 sm:col-span-2">
+                        <input type="checkbox" wire:model="policies.lists.partition_large_lists" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <span>
+                            <span class="block text-sm font-medium text-gray-800">Grosse Listen alphabetisch partitionieren</span>
+                            <span class="block text-xs text-gray-500">Nutzt Suchabfragen pro Dialog, wenn normale Scroll-Listen zu gross werden.</span>
+                        </span>
+                    </label>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Partition ab Listen-Groesse</label>
+                        <input type="number" min="1" wire:model.defer="policies.lists.partition_threshold" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Suchabfragen pro Dialog</label>
+                        <input type="number" min="1" max="100" wire:model.defer="policies.lists.search_queries_per_dialog" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Max. Treffer pro Suchpartition</label>
+                        <input type="number" min="25" wire:model.defer="policies.lists.search_partition_max_items" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Fortschritt speichern alle X Eintraege</label>
+                        <input type="number" min="25" wire:model.defer="policies.lists.progress_checkpoint_size" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Zielsuche: Max. Treffer</label>
+                        <input type="number" min="0" wire:model.defer="policies.lists.search_target_max_items" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <p class="mt-1 text-xs text-gray-500">0 bedeutet nicht begrenzen.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Zielsuche: Max. Scroll-Runden</label>
+                        <input type="number" min="1" wire:model.defer="policies.lists.search_target_max_scroll_rounds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Suchfeld-Versuche</label>
+                        <input type="number" min="1" max="10" wire:model.defer="policies.lists.search_input_max_attempts" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Wartezeit nach Suchabfrage in ms</label>
+                        <input type="number" min="250" max="60000" wire:model.defer="policies.lists.search_wait_ms" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -84,6 +169,14 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Max. Scroll-Runden</label>
                     <input type="number" min="1" wire:model.defer="policies.posts.max_scroll_rounds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Max. Likes pro Beitrag</label>
+                    <input type="number" min="1" wire:model.defer="policies.posts.max_likes_per_post" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Max. Kommentare pro Beitrag</label>
+                    <input type="number" min="1" wire:model.defer="policies.posts.max_comments_per_post" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 </div>
             </div>
         </div>
@@ -150,6 +243,14 @@
                 <label class="block text-sm font-medium text-gray-700">Listen-Suchrunden je Kandidat</label>
                 <input type="number" min="1" wire:model.defer="policies.suggestion_deep_search.public_list_max_scroll_rounds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
             </div>
+            <label class="flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+                <input type="checkbox" wire:model="policies.suggestion_deep_search.profile_hover_cards_enabled" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <span class="text-sm font-medium text-gray-800">Profil-Hovercards fuer Kandidaten nutzen</span>
+            </label>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Hovercard-Wartezeit in ms</label>
+                <input type="number" min="250" max="60000" wire:model.defer="policies.suggestion_deep_search.profile_hover_card_wait_ms" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+            </div>
         </div>
     </div>
 
@@ -190,6 +291,11 @@
                 <input type="checkbox" wire:model="policies.public_connections.rate_limit_account_switch_enabled" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
                 <span class="text-sm font-medium text-gray-800">Bei Rate-Limit Scraper-Account wechseln</span>
             </label>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Max. Scraper-Profilwechsel je Kandidat</label>
+                <input type="number" min="0" max="10" wire:model.defer="policies.public_connections.max_scraper_profile_switches" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                <p class="mt-1 text-xs text-gray-500">0 deaktiviert Wechsel auch dann, wenn der Schalter aktiv ist.</p>
+            </div>
         </div>
     </div>
 
