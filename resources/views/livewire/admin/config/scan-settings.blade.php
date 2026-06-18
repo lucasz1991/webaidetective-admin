@@ -178,6 +178,21 @@
                     <label class="block text-sm font-medium text-gray-700">Max. Kommentare pro Beitrag</label>
                     <input type="number" min="1" wire:model.defer="policies.posts.max_comments_per_post" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 </div>
+                <label class="flex items-start gap-3 rounded-md border border-gray-200 bg-gray-50 p-3 sm:col-span-2">
+                    <input type="checkbox" wire:model="policies.posts.open_likes_dialog_enabled" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <span>
+                        <span class="block text-sm font-medium text-gray-800">Likes-Dialog pro Beitrag oeffnen</span>
+                        <span class="block text-xs text-gray-500">Sammelt Liker-Profile direkt aus dem sichtbaren Instagram-Dialog und speichert Likes inkl. Profil-Verknuepfung.</span>
+                    </span>
+                </label>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Likes-Dialog: Max. Scroll-Runden</label>
+                    <input type="number" min="1" max="1000" wire:model.defer="policies.posts.like_dialog_max_scroll_rounds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Kommentar-Dialog: Max. Scroll-Runden</label>
+                    <input type="number" min="1" max="1000" wire:model.defer="policies.posts.comment_dialog_max_scroll_rounds" class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
             </div>
         </div>
     </div>
