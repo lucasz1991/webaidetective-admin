@@ -134,11 +134,13 @@
             @endif
 
             @if($hasRuntimeDetails)
-                <details class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 transition hover:bg-slate-50">
+                <details class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" @if($scan->runtime_details_open ?? false) open @endif>
+                    <summary wire:click="toggleScanRuntimeDetails(@js($scan->scan_key))" class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 transition hover:bg-slate-50">
                         <div class="flex items-center gap-2">
                             <span class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Laufzeit & Verlauf</span>
-                            <span class="rounded-full bg-white px-2 py-1 text-[9px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200">Aufklappen</span>
+                            <span class="rounded-full bg-white px-2 py-1 text-[9px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200">
+                                {{ ($scan->runtime_details_open ?? false) ? 'Zuklappen' : 'Aufklappen' }}
+                            </span>
                         </div>
                         <div class="flex flex-wrap gap-1.5">
                             @if($activeScanState)

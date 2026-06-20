@@ -33,6 +33,10 @@ class ScanMonitor extends Component
 
     public ?string $processNotice = null;
 
+    public bool $processAccordionOpen = false;
+
+    public array $expandedRuntimeDetails = [];
+
     public function mount(int $displayLimit = 4, bool $showLoadMore = false, bool $loadAllSources = false): void
     {
         $this->displayLimit = max(1, min(100, $displayLimit));
@@ -47,6 +51,28 @@ class ScanMonitor extends Component
         }
 
         $this->displayLimit += 100;
+    }
+
+    public function toggleProcessAccordion(): void
+    {
+        $this->processAccordionOpen = ! $this->processAccordionOpen;
+    }
+
+    public function toggleScanRuntimeDetails(string $scanKey): void
+    {
+        $scanKey = trim($scanKey);
+
+        if ($scanKey === '') {
+            return;
+        }
+
+        if ((bool) ($this->expandedRuntimeDetails[$scanKey] ?? false)) {
+            unset($this->expandedRuntimeDetails[$scanKey]);
+
+            return;
+        }
+
+        $this->expandedRuntimeDetails[$scanKey] = true;
     }
 
     public function render()
@@ -65,12 +91,14 @@ class ScanMonitor extends Component
             'hasMore' => $this->showLoadMore && $loadedScans->count() > $this->displayLimit,
             'scraperProcesses' => $scraperProcesses,
             'tablesAvailable' => $tablesAvailable,
+            'processAccordionOpen' => $this->processAccordionOpen,
         ]);
     }
 
     public function terminateScraperProcess(int $pid, bool $force = false): void
     {
         $pid = (int) $pid;
+        $this->processAccordionOpen = true;
 
         if ($pid <= 1) {
             $this->processNotice = 'Ungueltige Prozess-ID.';
@@ -1149,6 +1177,7 @@ class ScanMonitor extends Component
                 $scan->active_scan_state = $activeState;
                 $scan->events = $eventsByScanKey->get($scan->scan_key, collect());
                 $scan->processes = $this->matchingProcessesForScan($scan, $scraperProcesses, $activeState);
+                $scan->runtime_details_open = (bool) ($this->expandedRuntimeDetails[$scan->scan_key] ?? false);
 
                 return $scan;
             })
@@ -1579,6 +1608,7 @@ class ScanMonitor extends Component
             'events' => collect(),
             'processes' => collect(),
             'active_scan_state' => null,
+            'runtime_details_open' => false,
         ];
     }
 

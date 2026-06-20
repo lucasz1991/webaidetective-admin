@@ -54,8 +54,8 @@
                 ->count();
         @endphp
         <div class="border-b border-slate-200 bg-slate-50/70 px-5 py-5 sm:px-6">
-            <details class="group" @if($processNotice) open @endif>
-                <summary class="flex cursor-pointer list-none flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm transition hover:bg-slate-50 lg:flex-row lg:items-center lg:justify-between">
+            <details class="group" @if($processAccordionOpen) open @endif>
+                <summary wire:click="toggleProcessAccordion" class="flex cursor-pointer list-none flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm transition hover:bg-slate-50 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                     <div class="flex flex-wrap items-center gap-2">
                         <h3 class="text-sm font-black uppercase tracking-[0.16em] text-slate-700">Node-Scraper-Prozesse</h3>
@@ -74,7 +74,7 @@
                     </p>
                     </div>
                     <span class="inline-flex w-fit items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-black uppercase tracking-wide text-slate-600">
-                        Aufklappen
+                        {{ $processAccordionOpen ? 'Zuklappen' : 'Aufklappen' }}
                     </span>
                 </summary>
 
