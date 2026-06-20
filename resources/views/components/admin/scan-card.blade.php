@@ -134,9 +134,12 @@
             @endif
 
             @if($hasRuntimeDetails)
-                <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Laufzeit & Verlauf</div>
+                <details class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 transition hover:bg-slate-50">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Laufzeit & Verlauf</span>
+                            <span class="rounded-full bg-white px-2 py-1 text-[9px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200">Aufklappen</span>
+                        </div>
                         <div class="flex flex-wrap gap-1.5">
                             @if($activeScanState)
                                 <span class="rounded-full {{ $activeScanState->is_responsive ? 'bg-emerald-50 text-emerald-700 ring-emerald-100' : 'bg-amber-50 text-amber-700 ring-amber-100' }} px-2 py-1 text-[9px] font-black uppercase tracking-wide ring-1">
@@ -154,7 +157,9 @@
                                 </span>
                             @endif
                         </div>
-                    </div>
+                    </summary>
+
+                    <div class="border-t border-slate-200 p-4">
 
                     @if($activeScanState)
                         @php
@@ -250,7 +255,8 @@
                             </div>
                         </div>
                     @endif
-                </div>
+                    </div>
+                </details>
             @endif
         </div>
 

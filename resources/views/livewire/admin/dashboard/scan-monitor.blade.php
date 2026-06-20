@@ -54,8 +54,9 @@
                 ->count();
         @endphp
         <div class="border-b border-slate-200 bg-slate-50/70 px-5 py-5 sm:px-6">
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
+            <details class="group" @if($processNotice) open @endif>
+                <summary class="flex cursor-pointer list-none flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm transition hover:bg-slate-50 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
                     <div class="flex flex-wrap items-center gap-2">
                         <h3 class="text-sm font-black uppercase tracking-[0.16em] text-slate-700">Node-Scraper-Prozesse</h3>
                         @if($scraperProcesses->isNotEmpty())
@@ -71,8 +72,11 @@
                     <p class="mt-1 text-xs leading-5 text-slate-500">
                         Prozessfamilien werden ueber PID/PPID rekonstruiert. Unter einem Scraper erscheinen auch Kindprozesse wie Browser-Worker.
                     </p>
-                </div>
-            </div>
+                    </div>
+                    <span class="inline-flex w-fit items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-black uppercase tracking-wide text-slate-600">
+                        Aufklappen
+                    </span>
+                </summary>
 
             @if($processNotice)
                 <div class="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-900">
@@ -171,6 +175,7 @@
                     </div>
                 </div>
             @endif
+            </details>
         </div>
     @endif
 
