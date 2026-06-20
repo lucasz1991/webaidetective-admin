@@ -29,6 +29,7 @@
     };
     $initial = strtoupper(substr($scan->username ?: $scan->display_name, 0, 1));
     $scanProcesses = collect($scan->processes ?? []);
+    $scanProcessTree = collect($scan->process_tree ?? []);
     $scanEvents = collect($scan->events ?? []);
     $activeScanState = $scan->active_scan_state ?? null;
     $hasRuntimeDetails = $activeScanState || $scanProcesses->isNotEmpty() || $scanEvents->isNotEmpty();
@@ -187,34 +188,13 @@
                         <div class="mt-4">
                             <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Prozessfamilie</div>
                             <div class="mt-2 space-y-2">
-                                @foreach($scanProcesses as $process)
-                                    @php
-                                        $depth = min(5, max(0, (int) ($process->tree_depth ?? 0)));
-                                        $isScraperCommand = (bool) ($process->is_scraper_command ?? false);
-                                        $relatedUsernames = collect($process->effective_related_usernames ?? $process->related_usernames ?? [])
-                                            ->filter()
-                                            ->take(2);
-                                    @endphp
-                                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2" style="margin-left: {{ $depth * 0.85 }}rem">
-                                        <div class="flex flex-wrap items-center gap-1.5">
-                                            <span class="rounded-md {{ $isScraperCommand ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200' }} px-2 py-0.5 text-[10px] font-black">PID {{ $process->pid }}</span>
-                                            <span class="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">PPID {{ $process->parent_pid }}</span>
-                                            <span class="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">{{ $isScraperCommand ? 'Scraper' : 'Kind' }}</span>
-                                            @if($process->script_name || $process->family_script_name)
-                                                <span class="max-w-full truncate rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
-                                                    {{ $process->script_name ?: $process->family_script_name }}
-                                                </span>
-                                            @endif
-                                            @foreach($relatedUsernames as $username)
-                                                <span class="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">@{{ $username }}</span>
-                                            @endforeach
-                                            <span class="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">CPU {{ number_format($process->cpu, 1, ',', '.') }}%</span>
-                                        </div>
-                                        <div class="mt-1 truncate font-mono text-[10px] text-slate-400" title="{{ $process->command }}">
-                                            {{ $process->short_command }}
-                                        </div>
-                                    </div>
-                                @endforeach
+                                <div class="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                                    @include('livewire.admin.dashboard.partials.scraper-process-tree', [
+                                        'processes' => $scanProcessTree,
+                                        'depth' => 0,
+                                        'keyPrefix' => 'scan-'.$scan->scan_key,
+                                    ])
+                                </div>
                             </div>
                         </div>
                     @endif

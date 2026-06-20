@@ -35,6 +35,8 @@ class ScanMonitor extends Component
 
     public bool $processAccordionOpen = false;
 
+    public array $expandedProcessGroups = [];
+
     public array $expandedRuntimeDetails = [];
 
     public function mount(int $displayLimit = 4, bool $showLoadMore = false, bool $loadAllSources = false): void
@@ -56,6 +58,21 @@ class ScanMonitor extends Component
     public function toggleProcessAccordion(): void
     {
         $this->processAccordionOpen = ! $this->processAccordionOpen;
+    }
+
+    public function toggleProcessGroup(int $pid): void
+    {
+        if ($pid <= 0) {
+            return;
+        }
+
+        if ((bool) ($this->expandedProcessGroups[$pid] ?? false)) {
+            unset($this->expandedProcessGroups[$pid]);
+
+            return;
+        }
+
+        $this->expandedProcessGroups[$pid] = true;
     }
 
     public function toggleScanRuntimeDetails(string $scanKey): void
@@ -85,11 +102,13 @@ class ScanMonitor extends Component
         $loadedScans = $tablesAvailable
             ? $this->attachRuntimeDetailsToScans($this->loadScans(), $scraperProcesses)
             : collect();
+        $scraperProcessTrees = $this->buildScraperProcessTrees($scraperProcesses);
 
         return view('livewire.admin.dashboard.scan-monitor', [
             'scans' => $loadedScans->take($this->displayLimit)->values(),
             'hasMore' => $this->showLoadMore && $loadedScans->count() > $this->displayLimit,
             'scraperProcesses' => $scraperProcesses,
+            'scraperProcessTrees' => $scraperProcessTrees,
             'tablesAvailable' => $tablesAvailable,
             'processAccordionOpen' => $this->processAccordionOpen,
         ]);
@@ -377,6 +396,51 @@ class ScanMonitor extends Component
 
                 return ((int) $right->elapsed_seconds <=> (int) $left->elapsed_seconds)
                     ?: ((int) $left->pid <=> (int) $right->pid);
+            })
+            ->values();
+    }
+
+    private function buildScraperProcessTrees(Collection $processes): Collection
+    {
+        if ($processes->isEmpty()) {
+            return collect();
+        }
+
+        $entriesByPid = $processes
+            ->mapWithKeys(function (object $process): array {
+                $node = clone $process;
+                $node->children = collect();
+                $node->is_group_open = (bool) ($this->expandedProcessGroups[(int) $node->pid] ?? false);
+                $node->has_children = false;
+
+                return [(int) $node->pid => $node];
+            });
+        $roots = collect();
+
+        foreach ($entriesByPid as $pid => $node) {
+            $parentPid = (int) ($node->parent_pid ?? 0);
+
+            if ($parentPid > 0 && $parentPid !== (int) $pid && $entriesByPid->has($parentPid)) {
+                $entriesByPid->get($parentPid)->children->push($node);
+
+                continue;
+            }
+
+            $roots->push($node);
+        }
+
+        return $this->sortProcessTreeNodes($roots);
+    }
+
+    private function sortProcessTreeNodes(Collection $nodes): Collection
+    {
+        return $this->sortProcessSiblings($nodes)
+            ->map(function (object $node): object {
+                $node->children = $this->sortProcessTreeNodes($node->children ?? collect());
+                $node->children_count = $node->children->count();
+                $node->has_children = $node->children_count > 0;
+
+                return $node;
             })
             ->values();
     }
@@ -1177,6 +1241,7 @@ class ScanMonitor extends Component
                 $scan->active_scan_state = $activeState;
                 $scan->events = $eventsByScanKey->get($scan->scan_key, collect());
                 $scan->processes = $this->matchingProcessesForScan($scan, $scraperProcesses, $activeState);
+                $scan->process_tree = $this->buildScraperProcessTrees($scan->processes);
                 $scan->runtime_details_open = (bool) ($this->expandedRuntimeDetails[$scan->scan_key] ?? false);
 
                 return $scan;
@@ -1607,6 +1672,7 @@ class ScanMonitor extends Component
             'metrics' => collect($attributes['metrics'] ?? [])->take(3)->values(),
             'events' => collect(),
             'processes' => collect(),
+            'process_tree' => collect(),
             'active_scan_state' => null,
             'runtime_details_open' => false,
         ];
