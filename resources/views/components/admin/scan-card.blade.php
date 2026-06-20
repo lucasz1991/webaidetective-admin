@@ -28,6 +28,10 @@
         default => 'border-slate-200',
     };
     $initial = strtoupper(substr($scan->username ?: $scan->display_name, 0, 1));
+    $scanProcesses = collect($scan->processes ?? []);
+    $scanEvents = collect($scan->events ?? []);
+    $activeScanState = $scan->active_scan_state ?? null;
+    $hasRuntimeDetails = $activeScanState || $scanProcesses->isNotEmpty() || $scanEvents->isNotEmpty();
 @endphp
 
 <article {{ $attributes->class([
@@ -126,6 +130,126 @@
                             </div>
                         </div>
                     @endforeach
+                </div>
+            @endif
+
+            @if($hasRuntimeDetails)
+                <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Laufzeit & Verlauf</div>
+                        <div class="flex flex-wrap gap-1.5">
+                            @if($activeScanState)
+                                <span class="rounded-full {{ $activeScanState->is_responsive ? 'bg-emerald-50 text-emerald-700 ring-emerald-100' : 'bg-amber-50 text-amber-700 ring-amber-100' }} px-2 py-1 text-[9px] font-black uppercase tracking-wide ring-1">
+                                    {{ $activeScanState->is_responsive ? 'Heartbeat aktiv' : 'Heartbeat pruefen' }}
+                                </span>
+                            @endif
+                            @if($scanProcesses->isNotEmpty())
+                                <span class="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-slate-600 ring-1 ring-slate-200">
+                                    {{ $scanProcesses->count() }} Prozesse
+                                </span>
+                            @endif
+                            @if($scanEvents->isNotEmpty())
+                                <span class="rounded-full bg-indigo-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-indigo-700 ring-1 ring-indigo-100">
+                                    {{ $scanEvents->count() }} Events
+                                </span>
+                            @endif
+                        </div>
+                    </div>
+
+                    @if($activeScanState)
+                        @php
+                            $heartbeatAt = $activeScanState->last_output_at ?: $activeScanState->updated_at;
+                        @endphp
+                        <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-black text-slate-800">{{ $activeScanState->label }}</span>
+                                <span class="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">Gen. {{ $activeScanState->generation }}</span>
+                                @if($activeScanState->graceful_stop_requested)
+                                    <span class="rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">Stopp angefragt</span>
+                                @endif
+                            </div>
+                            @if($heartbeatAt)
+                                <div class="mt-1 text-[11px] text-slate-500">
+                                    Letzter Output {{ \Carbon\Carbon::parse($heartbeatAt)->diffForHumans() }}
+                                </div>
+                            @endif
+                        </div>
+                    @endif
+
+                    @if($scanProcesses->isNotEmpty())
+                        <div class="mt-4">
+                            <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Prozessfamilie</div>
+                            <div class="mt-2 space-y-2">
+                                @foreach($scanProcesses as $process)
+                                    @php
+                                        $depth = min(5, max(0, (int) ($process->tree_depth ?? 0)));
+                                        $isScraperCommand = (bool) ($process->is_scraper_command ?? false);
+                                        $relatedUsernames = collect($process->effective_related_usernames ?? $process->related_usernames ?? [])
+                                            ->filter()
+                                            ->take(2);
+                                    @endphp
+                                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2" style="margin-left: {{ $depth * 0.85 }}rem">
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            <span class="rounded-md {{ $isScraperCommand ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200' }} px-2 py-0.5 text-[10px] font-black">PID {{ $process->pid }}</span>
+                                            <span class="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">PPID {{ $process->parent_pid }}</span>
+                                            <span class="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">{{ $isScraperCommand ? 'Scraper' : 'Kind' }}</span>
+                                            @if($process->script_name || $process->family_script_name)
+                                                <span class="max-w-full truncate rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                                                    {{ $process->script_name ?: $process->family_script_name }}
+                                                </span>
+                                            @endif
+                                            @foreach($relatedUsernames as $username)
+                                                <span class="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">@{{ $username }}</span>
+                                            @endforeach
+                                            <span class="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">CPU {{ number_format($process->cpu, 1, ',', '.') }}%</span>
+                                        </div>
+                                        <div class="mt-1 truncate font-mono text-[10px] text-slate-400" title="{{ $process->command }}">
+                                            {{ $process->short_command }}
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    @if($scanEvents->isNotEmpty())
+                        <div class="mt-4">
+                            <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Letzte Scan-Events</div>
+                            <div class="mt-2 space-y-2">
+                                @foreach($scanEvents as $event)
+                                    @php
+                                        $eventDotClass = match ($event->status_level) {
+                                            'success' => 'bg-emerald-500',
+                                            'error' => 'bg-rose-500',
+                                            'cancelled' => 'bg-slate-400',
+                                            'partial' => 'bg-blue-500',
+                                            default => 'bg-slate-300',
+                                        };
+                                    @endphp
+                                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <div class="flex min-w-0 items-center gap-2">
+                                                <span class="h-2 w-2 shrink-0 rounded-full {{ $eventDotClass }}"></span>
+                                                <span class="truncate font-black text-slate-800">{{ $event->stage ?: $event->phase ?: 'scan-event' }}</span>
+                                                @if($event->percent !== null)
+                                                    <span class="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">{{ $event->percent }}%</span>
+                                                @endif
+                                            </div>
+                                            @if($event->occurred_at)
+                                                <span class="shrink-0 text-[10px] font-semibold text-slate-400">{{ \Carbon\Carbon::parse($event->occurred_at)->diffForHumans() }}</span>
+                                            @endif
+                                        </div>
+                                        <div class="mt-1 line-clamp-2 text-[11px] leading-5 text-slate-500">
+                                            {{ $event->message ?: 'Kein Event-Text gespeichert.' }}
+                                        </div>
+                                        @if($event->payload_summary)
+                                            <div class="mt-1 truncate text-[10px] font-semibold text-slate-400">{{ $event->payload_summary }}</div>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
                 </div>
             @endif
         </div>

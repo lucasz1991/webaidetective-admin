@@ -4,6 +4,7 @@ namespace App\Livewire\Admin\Dashboard;
 
 use App\Support\PublicAssetUrl;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -54,12 +55,15 @@ class ScanMonitor extends Component
             && collect($this->scanTableNames())->contains(
                 fn (string $table): bool => Schema::hasTable($table),
             );
-        $loadedScans = $tablesAvailable ? $this->loadScans() : collect();
+        $scraperProcesses = $this->loadScraperProcesses();
+        $loadedScans = $tablesAvailable
+            ? $this->attachRuntimeDetailsToScans($this->loadScans(), $scraperProcesses)
+            : collect();
 
         return view('livewire.admin.dashboard.scan-monitor', [
             'scans' => $loadedScans->take($this->displayLimit)->values(),
             'hasMore' => $this->showLoadMore && $loadedScans->count() > $this->displayLimit,
-            'scraperProcesses' => $this->loadScraperProcesses(),
+            'scraperProcesses' => $scraperProcesses,
             'tablesAvailable' => $tablesAvailable,
         ]);
     }
@@ -158,6 +162,44 @@ class ScanMonitor extends Component
 
     private function loadScraperProcesses(): Collection
     {
+        $processInventory = $this->loadProcessInventory();
+
+        if ($processInventory->isEmpty()) {
+            return collect();
+        }
+
+        $childrenByParent = $processInventory->groupBy('parent_pid');
+        $scraperPids = $processInventory
+            ->filter(fn (object $entry): bool => (bool) ($entry->is_scraper_command ?? false))
+            ->pluck('pid')
+            ->map(fn (mixed $pid): int => (int) $pid)
+            ->filter(fn (int $pid): bool => $pid > 0)
+            ->values();
+
+        if ($scraperPids->isEmpty()) {
+            return collect();
+        }
+
+        $familyPids = [];
+
+        foreach ($scraperPids as $pid) {
+            $seen = [];
+            $familyPids[$pid] = true;
+
+            foreach ($this->descendantPidsFromInventory($pid, $childrenByParent, $seen) as $descendantPid) {
+                $familyPids[$descendantPid] = true;
+            }
+        }
+
+        return $this->flattenScraperProcessTree(
+            $processInventory
+                ->filter(fn (object $entry): bool => isset($familyPids[(int) $entry->pid]))
+                ->values(),
+        );
+    }
+
+    private function loadProcessInventory(): Collection
+    {
         $process = Process::fromShellCommandline('ps -axo pid=,ppid=,etime=,stat=,pcpu=,pmem=,command=');
         $process->setTimeout(5);
 
@@ -181,8 +223,133 @@ class ScanMonitor extends Component
 
         return collect(preg_split('/\R/u', trim($process->getOutput())) ?: [])
             ->map(fn (string $line): ?object => $this->parseProcessLine($line))
-            ->filter(fn (?object $entry): bool => $entry !== null && $this->isInstagramScraperProcessCommand($entry->command))
-            ->sortByDesc(fn (object $entry): int => $entry->elapsed_seconds)
+            ->filter(fn (?object $entry): bool => $entry !== null)
+            ->values();
+    }
+
+    private function descendantPidsFromInventory(int $pid, Collection $childrenByParent, array &$seen): array
+    {
+        if ($pid <= 0 || isset($seen[$pid])) {
+            return [];
+        }
+
+        $seen[$pid] = true;
+        $descendants = [];
+
+        foreach ($childrenByParent->get($pid, collect()) as $child) {
+            $childPid = (int) ($child->pid ?? 0);
+
+            if ($childPid <= 0 || isset($seen[$childPid])) {
+                continue;
+            }
+
+            $descendants[] = $childPid;
+            array_push($descendants, ...$this->descendantPidsFromInventory($childPid, $childrenByParent, $seen));
+        }
+
+        return $descendants;
+    }
+
+    private function flattenScraperProcessTree(Collection $processes): Collection
+    {
+        if ($processes->isEmpty()) {
+            return collect();
+        }
+
+        $entriesByPid = $processes->keyBy('pid');
+        $childrenByParent = $processes->groupBy('parent_pid');
+        $roots = $this->sortProcessSiblings(
+            $processes->filter(fn (object $entry): bool => ! $entriesByPid->has((int) $entry->parent_pid)),
+        );
+        $flattened = collect();
+        $visited = [];
+
+        if ($roots->isEmpty()) {
+            $roots = $this->sortProcessSiblings($processes);
+        }
+
+        $walk = function (object $entry, int $depth, array $ancestorPids, array $familyContext) use (
+            &$walk,
+            &$visited,
+            $childrenByParent,
+            $flattened,
+        ): void {
+            $pid = (int) $entry->pid;
+
+            if ($pid <= 0 || isset($visited[$pid])) {
+                return;
+            }
+
+            $visited[$pid] = true;
+            $children = $this->sortProcessSiblings($childrenByParent->get($pid, collect()));
+            $ownRelatedUsernames = collect($entry->related_usernames ?? [])
+                ->filter()
+                ->values();
+            $effectiveRelatedUsernames = $ownRelatedUsernames
+                ->merge($familyContext['related_usernames'] ?? [])
+                ->unique()
+                ->values()
+                ->all();
+            $effectiveScanTypes = collect([
+                $entry->scan_type ?? null,
+                $familyContext['scan_type'] ?? null,
+            ])
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            $row = clone $entry;
+
+            $row->tree_depth = $depth;
+            $row->ancestor_pids = $ancestorPids;
+            $row->children_count = $children->count();
+            $row->family_root_pid = (int) ($familyContext['root_pid'] ?? $pid);
+            $row->family_script_name = $familyContext['script_name'] ?? $entry->script_name;
+            $row->family_scan_type = $familyContext['scan_type'] ?? $entry->scan_type;
+            $row->family_scan_type_label = $row->family_scan_type
+                ? $this->scanTypeLabel((string) $row->family_scan_type)
+                : null;
+            $row->effective_related_usernames = $effectiveRelatedUsernames;
+            $row->effective_scan_types = $effectiveScanTypes;
+            $row->is_family_child = $depth > 0;
+
+            $flattened->push($row);
+
+            $childContext = [
+                'root_pid' => $row->family_root_pid,
+                'script_name' => $row->family_script_name ?: $entry->script_name,
+                'scan_type' => $row->family_scan_type ?: $entry->scan_type,
+                'related_usernames' => $effectiveRelatedUsernames,
+            ];
+
+            foreach ($children as $child) {
+                $walk($child, $depth + 1, [...$ancestorPids, $pid], $childContext);
+            }
+        };
+
+        foreach ($roots as $root) {
+            $walk($root, 0, [], [
+                'root_pid' => (int) $root->pid,
+                'script_name' => $root->script_name,
+                'scan_type' => $root->scan_type,
+                'related_usernames' => $root->related_usernames ?? [],
+            ]);
+        }
+
+        return $flattened;
+    }
+
+    private function sortProcessSiblings(Collection $processes): Collection
+    {
+        return $processes
+            ->sort(function (object $left, object $right): int {
+                if ((bool) $left->is_scraper_command !== (bool) $right->is_scraper_command) {
+                    return $left->is_scraper_command ? -1 : 1;
+                }
+
+                return ((int) $right->elapsed_seconds <=> (int) $left->elapsed_seconds)
+                    ?: ((int) $left->pid <=> (int) $right->pid);
+            })
             ->values();
     }
 
@@ -195,6 +362,10 @@ class ScanMonitor extends Component
         $elapsedSeconds = $this->parseProcessElapsedSeconds($matches[3]);
         $cpu = (float) $matches[5];
         $ageMinutes = (int) floor($elapsedSeconds / 60);
+        $command = trim($matches[7]);
+        $metadata = $this->parseScraperCommandMetadata($command);
+        $isScraperCommand = (bool) ($metadata->is_scraper_command ?? false);
+        $scanType = $metadata->scan_type ?? null;
 
         return (object) [
             'pid' => (int) $matches[1],
@@ -205,8 +376,18 @@ class ScanMonitor extends Component
             'state' => $matches[4],
             'cpu' => $cpu,
             'memory' => (float) $matches[6],
-            'command' => trim($matches[7]),
-            'short_command' => $this->shortenProcessCommand(trim($matches[7])),
+            'command' => $command,
+            'short_command' => $this->shortenProcessCommand($command),
+            'is_scraper_command' => $isScraperCommand,
+            'script_name' => $metadata->script_name ?? null,
+            'operation_mode' => $metadata->operation_mode ?? null,
+            'scan_type' => $scanType,
+            'scan_type_label' => $scanType ? $this->scanTypeLabel((string) $scanType) : null,
+            'primary_username' => $metadata->primary_username ?? null,
+            'public_username' => $metadata->public_username ?? null,
+            'target_username' => $metadata->target_username ?? null,
+            'related_usernames' => $metadata->related_usernames ?? [],
+            'runtime_config_path' => $metadata->runtime_config_path ?? null,
             'is_idle_suspect' => $ageMinutes >= self::SCRAPER_PROCESS_IDLE_MINUTES
                 && $cpu <= self::SCRAPER_PROCESS_LOW_CPU_PERCENT,
         ];
@@ -237,6 +418,166 @@ class ScanMonitor extends Component
         }
 
         return $days * 86400;
+    }
+
+    private function parseScraperCommandMetadata(string $command): object
+    {
+        $tokens = $this->tokenizeProcessCommand($command);
+        $scriptIndex = null;
+        $scriptPath = null;
+        $scriptName = null;
+
+        foreach ($tokens as $index => $token) {
+            $candidate = trim($token, "\"'");
+            $basename = basename($candidate);
+
+            if (preg_match('/^scrape-instagram(?:-[a-z0-9-]+)?\.cjs$/i', $basename)) {
+                $scriptIndex = $index;
+                $scriptPath = $candidate;
+                $scriptName = $basename;
+
+                break;
+            }
+        }
+
+        if ($scriptIndex === null) {
+            return (object) [
+                'is_scraper_command' => $this->isInstagramScraperProcessCommand($command),
+                'script_name' => null,
+                'operation_mode' => null,
+                'scan_type' => null,
+                'primary_username' => null,
+                'public_username' => null,
+                'target_username' => null,
+                'related_usernames' => [],
+                'runtime_config_path' => null,
+            ];
+        }
+
+        $args = array_values(array_slice($tokens, $scriptIndex + 1));
+        $operationMode = null;
+        $scanType = null;
+        $primaryUsername = null;
+        $publicUsername = null;
+        $targetUsername = null;
+        $runtimeConfigPath = null;
+
+        if ($scriptName === 'scrape-instagram-public-profile-connections.cjs') {
+            $publicUsername = $this->normalizeInstagramUsername($args[0] ?? null);
+            $targetUsername = $this->normalizeInstagramUsername($args[1] ?? null);
+            $runtimeConfigPath = $this->runtimeConfigPathFromArgument($args[2] ?? null);
+            $operationMode = 'public-profile-connections';
+            $scanType = 'public_connections';
+            $primaryUsername = $targetUsername ?: $publicUsername;
+        } else {
+            $primaryUsername = $this->normalizeInstagramUsername($args[0] ?? null);
+            $runtimeConfigPath = $this->runtimeConfigPathFromArgument($args[1] ?? null);
+            $operationMode = $this->operationModeFromScriptName((string) $scriptName);
+
+            if (isset($args[2]) && is_scalar($args[2]) && trim((string) $args[2]) !== '') {
+                $operationMode = strtolower(trim((string) $args[2]));
+            }
+
+            $scanType = $this->scanTypeFromOperationMode($operationMode, (string) $scriptName);
+        }
+
+        $relatedUsernames = collect([$primaryUsername, $publicUsername, $targetUsername])
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        return (object) [
+            'is_scraper_command' => true,
+            'script_path' => $scriptPath,
+            'script_name' => $scriptName,
+            'operation_mode' => $operationMode,
+            'scan_type' => $scanType,
+            'primary_username' => $primaryUsername,
+            'public_username' => $publicUsername,
+            'target_username' => $targetUsername,
+            'related_usernames' => $relatedUsernames,
+            'runtime_config_path' => $runtimeConfigPath,
+        ];
+    }
+
+    private function tokenizeProcessCommand(string $command): array
+    {
+        return collect(str_getcsv($command, ' '))
+            ->map(fn (mixed $token): string => trim((string) $token))
+            ->filter(fn (string $token): bool => $token !== '')
+            ->values()
+            ->all();
+    }
+
+    private function runtimeConfigPathFromArgument(mixed $argument): ?string
+    {
+        if (! is_scalar($argument)) {
+            return null;
+        }
+
+        $path = trim((string) $argument, "\"' \t\n\r\0\x0B");
+
+        if ($path === '') {
+            return null;
+        }
+
+        return str_ends_with($path, '.json') || str_contains($path, 'instagram-scraper-config-')
+            ? $path
+            : null;
+    }
+
+    private function operationModeFromScriptName(string $scriptName): ?string
+    {
+        return match ($scriptName) {
+            'scrape-instagram-mini.cjs' => 'mini',
+            'scrape-instagram-full.cjs',
+            'scrape-instagram.cjs' => 'analyze',
+            'scrape-instagram-posts.cjs' => 'posts',
+            'scrape-instagram-stories.cjs' => 'stories',
+            'scrape-instagram-suggestions-basic.cjs',
+            'scrape-instagram-suggestions.cjs',
+            'scrape-instagram-suggestions-router.cjs' => 'suggestions',
+            'scrape-instagram-suggestions-deepsearch.cjs' => 'suggestion-connections',
+            'scrape-instagram-public-profile-connections.cjs' => 'public-profile-connections',
+            default => null,
+        };
+    }
+
+    private function scanTypeFromOperationMode(?string $operationMode, string $scriptName): ?string
+    {
+        $mode = strtolower(trim((string) $operationMode));
+        $mode = str_replace('_', '-', $mode);
+
+        return match ($mode) {
+            'mini' => 'mini',
+            'followers' => 'followers',
+            'following' => 'following',
+            'posts', 'post-scan' => 'posts',
+            'suggestions', 'suggestion-connections' => 'suggestions',
+            'public-profile-connections' => 'public_connections',
+            'stories' => 'stories',
+            'analyze', 'profile', 'full' => 'full',
+            default => str_contains($scriptName, 'list') ? null : 'analysis',
+        };
+    }
+
+    private function normalizeInstagramUsername(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $username = strtolower(trim((string) $value));
+        $username = preg_replace('/^https?:\/\/(www\.)?instagram\.com\//i', '', $username) ?? $username;
+        $username = preg_replace('/[?#].*$/', '', $username) ?? $username;
+        $username = trim(ltrim($username, '@'), "/ \t\n\r\0\x0B");
+
+        if ($username === '' || ! preg_match('/^[a-z0-9._]+$/', $username)) {
+            return null;
+        }
+
+        return mb_substr($username, 0, 64);
     }
 
     private function commandForProcess(int $pid): ?string
@@ -365,6 +706,8 @@ class ScanMonitor extends Component
                 return $this->makeScan([
                     'scan_key' => 'active-person-'.$scan->tracked_person_id,
                     'scan_type' => $scanType,
+                    'source_scan_id' => $scan->snapshot_id,
+                    'event_scan_type' => 'tracked_person_instagram_snapshot',
                     'snapshot_id' => $scan->snapshot_id,
                     'tracked_person_id' => $scan->tracked_person_id,
                     'instagram_profile_id' => $scan->instagram_profile_id,
@@ -448,6 +791,8 @@ class ScanMonitor extends Component
                 return $this->makeScan([
                     'scan_key' => 'snapshot-'.$scan->snapshot_id,
                     'scan_type' => $scanType,
+                    'source_scan_id' => $scan->snapshot_id,
+                    'event_scan_type' => 'tracked_person_instagram_snapshot',
                     'snapshot_id' => $scan->snapshot_id,
                     'tracked_person_id' => $scan->tracked_person_id,
                     'instagram_profile_id' => $scan->instagram_profile_id,
@@ -531,6 +876,8 @@ class ScanMonitor extends Component
                 return $this->makeScan([
                     'scan_key' => 'profile-list-'.$scan->scan_id,
                     'scan_type' => $scanType,
+                    'source_scan_id' => $scan->scan_id,
+                    'event_scan_type' => 'instagram_profile_list_scan',
                     'snapshot_id' => $scan->snapshot_id,
                     'tracked_person_id' => $scan->tracked_person_id,
                     'instagram_profile_id' => $scan->instagram_profile_id,
@@ -604,6 +951,8 @@ class ScanMonitor extends Component
                 return $this->makeScan([
                     'scan_key' => 'posts-'.$scan->scan_id,
                     'scan_type' => 'posts',
+                    'source_scan_id' => $scan->scan_id,
+                    'event_scan_type' => 'instagram_post_scan',
                     'snapshot_id' => $scan->snapshot_id,
                     'tracked_person_id' => $scan->tracked_person_id,
                     'instagram_profile_id' => $scan->instagram_profile_id,
@@ -674,6 +1023,8 @@ class ScanMonitor extends Component
                 return $this->makeScan([
                     'scan_key' => 'suggestions-'.$scan->scan_id,
                     'scan_type' => 'suggestions',
+                    'source_scan_id' => $scan->scan_id,
+                    'event_scan_type' => 'tracked_person_instagram_suggestion_scan',
                     'snapshot_id' => null,
                     'tracked_person_id' => $scan->tracked_person_id,
                     'instagram_profile_id' => $scan->instagram_profile_id,
@@ -751,6 +1102,8 @@ class ScanMonitor extends Component
                 return $this->makeScan([
                     'scan_key' => 'public-connections-'.$scan->scan_id,
                     'scan_type' => 'public_connections',
+                    'source_scan_id' => $scan->scan_id,
+                    'event_scan_type' => 'tracked_person_instagram_public_profile_scan',
                     'snapshot_id' => null,
                     'tracked_person_id' => $scan->tracked_person_id,
                     'instagram_profile_id' => $scan->instagram_profile_id,
@@ -778,6 +1131,425 @@ class ScanMonitor extends Component
             });
     }
 
+    private function attachRuntimeDetailsToScans(Collection $scans, Collection $scraperProcesses): Collection
+    {
+        if ($scans->isEmpty()) {
+            return $scans;
+        }
+
+        $activeStates = $this->loadActiveScanStates($scans);
+        $eventsByScanKey = $this->loadRecentScanEventsForScans($scans);
+
+        return $scans
+            ->map(function (object $scan) use ($activeStates, $eventsByScanKey, $scraperProcesses): object {
+                $activeState = $scan->tracked_person_id
+                    ? $activeStates->get((int) $scan->tracked_person_id)
+                    : null;
+
+                $scan->active_scan_state = $activeState;
+                $scan->events = $eventsByScanKey->get($scan->scan_key, collect());
+                $scan->processes = $this->matchingProcessesForScan($scan, $scraperProcesses, $activeState);
+
+                return $scan;
+            })
+            ->values();
+    }
+
+    private function loadActiveScanStates(Collection $scans): Collection
+    {
+        return $scans
+            ->pluck('tracked_person_id')
+            ->filter()
+            ->map(fn (mixed $trackedPersonId): int => (int) $trackedPersonId)
+            ->filter(fn (int $trackedPersonId): bool => $trackedPersonId > 0)
+            ->unique()
+            ->mapWithKeys(function (int $trackedPersonId): array {
+                try {
+                    $active = Cache::get($this->activeScanCacheKey($trackedPersonId), []);
+                } catch (\Throwable $error) {
+                    Log::debug('Active Instagram scan cache lookup failed for admin monitor.', [
+                        'tracked_person_id' => $trackedPersonId,
+                        'error' => $error->getMessage(),
+                    ]);
+
+                    $active = [];
+                }
+
+                $normalized = is_array($active)
+                    ? $this->normalizeActiveScanState($trackedPersonId, $active)
+                    : null;
+
+                return $normalized ? [$trackedPersonId => $normalized] : [];
+            });
+    }
+
+    private function normalizeActiveScanState(int $trackedPersonId, array $active): ?object
+    {
+        $generation = (int) ($active['generation'] ?? 0);
+
+        if ($generation <= 0) {
+            return null;
+        }
+
+        $processes = collect($active['processes'] ?? [])
+            ->filter(fn (mixed $process): bool => is_array($process))
+            ->map(fn (array $process): object => (object) [
+                'pid' => (int) ($process['pid'] ?? 0),
+                'label' => trim((string) ($process['label'] ?? 'Instagram-Scan')),
+                'registered_at' => $process['registeredAt'] ?? null,
+            ])
+            ->filter(fn (object $process): bool => $process->pid > 0)
+            ->values();
+        $lastOutputAt = $active['lastProcessOutputAt'] ?? null;
+        $updatedAt = $active['updatedAt'] ?? null;
+        $heartbeatAt = is_string($lastOutputAt) && $lastOutputAt !== '' ? $lastOutputAt : $updatedAt;
+        $heartbeatTimestamp = is_string($heartbeatAt) ? strtotime($heartbeatAt) : false;
+
+        return (object) [
+            'tracked_person_id' => $trackedPersonId,
+            'generation' => $generation,
+            'label' => trim((string) ($active['label'] ?? 'Instagram-Scan')),
+            'started_at' => $active['startedAt'] ?? null,
+            'updated_at' => $updatedAt,
+            'last_output_at' => $lastOutputAt,
+            'graceful_stop_requested' => (bool) ($active['gracefulStopRequested'] ?? false),
+            'graceful_stop_reason' => $active['gracefulStopReason'] ?? null,
+            'processes' => $processes,
+            'process_pids' => $processes->pluck('pid')->values()->all(),
+            'process_count' => $processes->count(),
+            'is_responsive' => $heartbeatTimestamp !== false
+                && $heartbeatTimestamp >= now()->subSeconds(45)->timestamp,
+        ];
+    }
+
+    private function activeScanCacheKey(int $trackedPersonId): string
+    {
+        return 'tracked-person-instagram-active-scan:'.$trackedPersonId;
+    }
+
+    private function loadRecentScanEventsForScans(Collection $scans): Collection
+    {
+        if (! Schema::hasTable('instagram_scan_events')) {
+            return collect();
+        }
+
+        $eligibleScans = $scans
+            ->filter(fn (object $scan): bool => is_string($scan->event_scan_type ?? null) && $scan->event_scan_type !== '')
+            ->values();
+
+        if ($eligibleScans->isEmpty()) {
+            return collect();
+        }
+
+        $query = DB::table('instagram_scan_events')
+            ->where('occurred_at', '>=', now('UTC')->subHours(12));
+        $hasConditions = false;
+        $scanIdsByType = $eligibleScans
+            ->filter(fn (object $scan): bool => $scan->source_scan_id !== null)
+            ->groupBy('event_scan_type');
+        $runningFallbacksByType = $eligibleScans
+            ->filter(fn (object $scan): bool => (bool) $scan->is_running)
+            ->groupBy('event_scan_type');
+
+        $query->where(function ($conditions) use ($scanIdsByType, $runningFallbacksByType, &$hasConditions): void {
+            foreach ($scanIdsByType as $eventScanType => $items) {
+                $scanIds = $items
+                    ->pluck('source_scan_id')
+                    ->filter()
+                    ->map(fn (mixed $scanId): int => (int) $scanId)
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                if ($scanIds === []) {
+                    continue;
+                }
+
+                $hasConditions = true;
+                $conditions->orWhere(function ($eventQuery) use ($eventScanType, $scanIds): void {
+                    $eventQuery
+                        ->where('scan_type', (string) $eventScanType)
+                        ->whereIn('scan_id', $scanIds);
+                });
+            }
+
+            foreach ($runningFallbacksByType as $eventScanType => $items) {
+                $trackedPersonIds = $items
+                    ->pluck('tracked_person_id')
+                    ->filter()
+                    ->map(fn (mixed $trackedPersonId): int => (int) $trackedPersonId)
+                    ->filter(fn (int $trackedPersonId): bool => $trackedPersonId > 0)
+                    ->unique()
+                    ->values()
+                    ->all();
+                $usernames = $items
+                    ->pluck('username')
+                    ->map(fn (mixed $username): ?string => $this->normalizeInstagramUsername($username))
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                if ($trackedPersonIds === [] && $usernames === []) {
+                    continue;
+                }
+
+                $hasConditions = true;
+                $conditions->orWhere(function ($eventQuery) use ($eventScanType, $trackedPersonIds, $usernames): void {
+                    $eventQuery->where('scan_type', (string) $eventScanType);
+                    $eventQuery->where(function ($identityQuery) use ($trackedPersonIds, $usernames): void {
+                        if ($trackedPersonIds !== []) {
+                            $identityQuery->orWhereIn('tracked_person_id', $trackedPersonIds);
+                        }
+
+                        if ($usernames !== []) {
+                            $identityQuery->orWhereIn('instagram_username', $usernames);
+                        }
+                    });
+                });
+            }
+
+            if (! $hasConditions) {
+                $conditions->whereRaw('1 = 0');
+            }
+        });
+
+        $events = $query
+            ->orderByDesc('occurred_at')
+            ->limit(min(800, max(120, $eligibleScans->count() * 10)))
+            ->get([
+                'id',
+                'scan_type',
+                'scan_id',
+                'instagram_username',
+                'tracked_person_id',
+                'user_id',
+                'phase',
+                'stage',
+                'status_level',
+                'percent',
+                'message',
+                'payload',
+                'occurred_at',
+            ])
+            ->map(fn (object $event): object => $this->normalizeScanEvent($event));
+        $eventsByScanKey = collect();
+
+        foreach ($eligibleScans as $scan) {
+            $eventsByScanKey->put(
+                $scan->scan_key,
+                $events
+                    ->filter(fn (object $event): bool => $this->eventMatchesScan($event, $scan))
+                    ->take(5)
+                    ->values(),
+            );
+        }
+
+        return $eventsByScanKey;
+    }
+
+    private function normalizeScanEvent(object $event): object
+    {
+        $payload = $this->decodePayload($event->payload ?? null);
+
+        return (object) [
+            'id' => (int) $event->id,
+            'scan_type' => (string) $event->scan_type,
+            'scan_id' => $this->nullableInteger($event->scan_id ?? null),
+            'instagram_username' => $this->normalizeInstagramUsername($event->instagram_username ?? null),
+            'tracked_person_id' => $this->nullableInteger($event->tracked_person_id ?? null),
+            'user_id' => $this->nullableInteger($event->user_id ?? null),
+            'phase' => $event->phase ?? null,
+            'stage' => $event->stage ?? null,
+            'status_level' => $this->normalizeStatusLevel((string) ($event->status_level ?? 'unknown')),
+            'percent' => $this->nullableInteger($event->percent ?? null),
+            'message' => $event->message ?? null,
+            'payload' => $payload,
+            'payload_summary' => $this->eventPayloadSummary($payload),
+            'occurred_at' => $event->occurred_at ?? null,
+        ];
+    }
+
+    private function eventMatchesScan(object $event, object $scan): bool
+    {
+        if ($event->scan_type !== ($scan->event_scan_type ?? null)) {
+            return false;
+        }
+
+        if (
+            $scan->source_scan_id !== null
+            && $event->scan_id !== null
+            && (int) $scan->source_scan_id === (int) $event->scan_id
+        ) {
+            return true;
+        }
+
+        if (! (bool) $scan->is_running) {
+            return false;
+        }
+
+        if (
+            $scan->tracked_person_id !== null
+            && $event->tracked_person_id !== null
+            && (int) $scan->tracked_person_id === (int) $event->tracked_person_id
+        ) {
+            return true;
+        }
+
+        $scanUsername = $this->normalizeInstagramUsername($scan->username ?? null);
+
+        return $scanUsername !== null
+            && $event->instagram_username !== null
+            && $scanUsername === $event->instagram_username;
+    }
+
+    private function eventPayloadSummary(array $payload): ?string
+    {
+        $parts = [];
+        $loaded = data_get($payload, 'loaded');
+        $expected = data_get($payload, 'expected');
+
+        if (is_numeric($loaded) && is_numeric($expected) && (int) $expected > 0) {
+            $parts[] = number_format((int) $loaded, 0, ',', '.')
+                .' / '
+                .number_format((int) $expected, 0, ',', '.');
+        }
+
+        $candidate = $this->normalizeInstagramUsername(data_get($payload, 'candidateUsername'));
+
+        if ($candidate) {
+            $parts[] = '@'.$candidate;
+        }
+
+        $foundFollowers = data_get($payload, 'foundFollowers');
+        $foundFollowing = data_get($payload, 'foundFollowing');
+
+        if (is_numeric($foundFollowers) || is_numeric($foundFollowing)) {
+            $parts[] = 'Treffer '
+                .number_format((int) $foundFollowers, 0, ',', '.')
+                .' / '
+                .number_format((int) $foundFollowing, 0, ',', '.');
+        }
+
+        foreach (['scraperProfileLabel', 'scraperProfileLoginUsername'] as $profileField) {
+            $profileValue = data_get($payload, $profileField);
+
+            if (is_scalar($profileValue) && trim((string) $profileValue) !== '') {
+                $parts[] = trim((string) $profileValue);
+
+                break;
+            }
+        }
+
+        return $parts !== [] ? implode(' | ', array_slice($parts, 0, 3)) : null;
+    }
+
+    private function matchingProcessesForScan(object $scan, Collection $processes, ?object $activeState): Collection
+    {
+        if ($processes->isEmpty()) {
+            return collect();
+        }
+
+        $activePids = collect($activeState->process_pids ?? [])
+            ->map(fn (mixed $pid): int => (int) $pid)
+            ->filter(fn (int $pid): bool => $pid > 0)
+            ->values();
+        $matchedPids = collect();
+
+        if ($activePids->isNotEmpty()) {
+            $matchedPids = $matchedPids->merge(
+                $processes
+                    ->filter(fn (object $process): bool => $this->processBelongsToPids($process, $activePids))
+                    ->pluck('pid'),
+            );
+        }
+
+        if ((bool) $scan->is_running) {
+            $matchedPids = $matchedPids->merge(
+                $processes
+                    ->filter(fn (object $process): bool => $this->processMatchesScan($process, $scan))
+                    ->pluck('pid'),
+            );
+        }
+
+        $matchedPids = $matchedPids
+            ->map(fn (mixed $pid): int => (int) $pid)
+            ->unique()
+            ->values();
+
+        if ($matchedPids->isEmpty()) {
+            return collect();
+        }
+
+        return $processes
+            ->filter(fn (object $process): bool => $matchedPids->contains((int) $process->pid))
+            ->values();
+    }
+
+    private function processBelongsToPids(object $process, Collection $activePids): bool
+    {
+        $pid = (int) ($process->pid ?? 0);
+        $familyRootPid = (int) ($process->family_root_pid ?? 0);
+        $ancestorPids = collect($process->ancestor_pids ?? [])
+            ->map(fn (mixed $ancestorPid): int => (int) $ancestorPid)
+            ->filter(fn (int $ancestorPid): bool => $ancestorPid > 0);
+
+        return $activePids->contains($pid)
+            || ($familyRootPid > 0 && $activePids->contains($familyRootPid))
+            || $ancestorPids->intersect($activePids)->isNotEmpty();
+    }
+
+    private function processMatchesScan(object $process, object $scan): bool
+    {
+        $scanUsername = $this->normalizeInstagramUsername($scan->username ?? null);
+
+        if ($scanUsername === null) {
+            return false;
+        }
+
+        $relatedUsernames = collect($process->effective_related_usernames ?? $process->related_usernames ?? [])
+            ->map(fn (mixed $username): ?string => $this->normalizeInstagramUsername($username))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if (! $relatedUsernames->contains($scanUsername)) {
+            return false;
+        }
+
+        $processScanTypes = collect($process->effective_scan_types ?? [$process->scan_type ?? null])
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($processScanTypes->isEmpty()) {
+            return true;
+        }
+
+        return $processScanTypes->contains(
+            fn (string $processScanType): bool => $this->processScanTypeMatches($processScanType, (string) $scan->scan_type),
+        );
+    }
+
+    private function processScanTypeMatches(string $processScanType, string $scanType): bool
+    {
+        if ($processScanType === $scanType) {
+            return true;
+        }
+
+        return match ($scanType) {
+            'public_connections' => $processScanType === 'public_connections',
+            'suggestions' => $processScanType === 'suggestions',
+            'posts' => $processScanType === 'posts',
+            'followers' => $processScanType === 'followers',
+            'following' => $processScanType === 'following',
+            'mini' => $processScanType === 'mini',
+            'full' => in_array($processScanType, ['full', 'analysis'], true),
+            'analysis' => in_array($processScanType, ['analysis', 'full', 'mini'], true),
+            default => false,
+        };
+    }
+
     private function makeScan(array $attributes): object
     {
         $scanType = (string) ($attributes['scan_type'] ?? 'analysis');
@@ -788,6 +1560,8 @@ class ScanMonitor extends Component
             'scan_type_label' => $this->scanTypeLabel($scanType),
             'scan_type_classes' => $this->scanTypeClasses($scanType),
             'context_label' => $attributes['context_label'] ?? null,
+            'source_scan_id' => $this->nullableInteger($attributes['source_scan_id'] ?? null),
+            'event_scan_type' => $attributes['event_scan_type'] ?? null,
             'snapshot_id' => $this->nullableInteger($attributes['snapshot_id'] ?? null),
             'tracked_person_id' => $this->nullableInteger($attributes['tracked_person_id'] ?? null),
             'instagram_profile_id' => $this->nullableInteger($attributes['instagram_profile_id'] ?? null),
@@ -802,6 +1576,9 @@ class ScanMonitor extends Component
             'screenshot_url' => $attributes['screenshot_url'] ?? null,
             'is_running' => (bool) ($attributes['is_running'] ?? false),
             'metrics' => collect($attributes['metrics'] ?? [])->take(3)->values(),
+            'events' => collect(),
+            'processes' => collect(),
+            'active_scan_state' => null,
         ];
     }
 
