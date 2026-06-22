@@ -18,6 +18,7 @@ use App\Livewire\Admin\Scans;
 use App\Livewire\Admin\UserProfile;
 use App\Livewire\Admin\ManageContacts;
 use App\Livewire\Admin\Cms\EditProject;
+use App\Livewire\Admin\Config\ScraperSettings;
 
 
 use App\Http\Controllers\PagebuilderProjectController;
@@ -40,6 +41,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::middleware(['role:admin'])->group(function () {
         Route::get('/', AdminDashboard::class)->name('admin.index');
         Route::get('/config', AdminConfig::class)->name('admin.config');
+        Route::get('/scraper-settings', ScraperSettings::class)->name('admin.scraper-settings');
         Route::get('/web-content-manager', WebContentManager::class)->name('admin.webcontentmanager');
         Route::get('/rating-structure', Index::class)->name('admin.ratingstructure.index');
         Route::get('/adminmessages', AdminMessageBox::class)->name('admin.messages');

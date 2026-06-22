@@ -47,14 +47,6 @@
                 <button
                     type="button"
                     class="whitespace-nowrap border-b-2 px-1 pb-4 text-sm font-medium"
-                    :class="{ 'border-blue-500 text-blue-600': activeTab === 'scraper', 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700': activeTab !== 'scraper' }"
-                    @click="activeTab = 'scraper'"
-                >
-                    Scraper
-                </button>
-                <button
-                    type="button"
-                    class="whitespace-nowrap border-b-2 px-1 pb-4 text-sm font-medium"
                     :class="{ 'border-blue-500 text-blue-600': activeTab === 'scans', 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700': activeTab !== 'scans' }"
                     @click="activeTab = 'scans'"
                 >
@@ -81,7 +73,7 @@
 
         <div x-show="activeTab === 'overview'" x-cloak class="space-y-8" x-collapse.duration.300ms>
             <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                Aenderungen in diesem Bereich wirken sofort auf die Anwendungen. Bitte pruefe Einstellungen fuer Mail und Scraper besonders sorgfaeltig.
+                Aenderungen in diesem Bereich wirken sofort auf die Anwendungen. Bitte pruefe Einstellungen fuer Mail und API-Zugaenge besonders sorgfaeltig.
             </div>
 
             <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -105,15 +97,6 @@
                     </button>
                 </div>
 
-                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                    <h3 class="text-lg font-semibold text-gray-700">Scraper-Profil</h3>
-                    <p class="mt-2 text-sm text-gray-600">
-                        Browser-Profil, Auto-Login und Session-Speicherung fuer den Instagram-Scraper.
-                    </p>
-                    <button type="button" @click="activeTab = 'scraper'" class="mt-3 text-sm font-medium text-blue-600">
-                        Scraper-Einstellungen oeffnen
-                    </button>
-                </div>
                 <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
                     <h3 class="text-lg font-semibold text-gray-700">Pakete & Credits</h3>
                     <p class="mt-2 text-sm text-gray-600">
@@ -273,11 +256,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div x-show="activeTab === 'scraper'" x-cloak class="space-y-6" x-collapse.duration.300ms>
-            <h2 class="text-2xl font-semibold">Scraper-Einstellungen</h2>
-            @livewire('admin.config.scraper-settings')
         </div>
 
         <div x-show="activeTab === 'scans'" x-cloak class="space-y-6" x-collapse.duration.300ms>
