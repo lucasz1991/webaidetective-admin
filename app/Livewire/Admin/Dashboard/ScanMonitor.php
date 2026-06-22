@@ -23,6 +23,8 @@ class ScanMonitor extends Component
 
     private ?string $assetBaseUrl = null;
 
+    private array $runtimeBrowserEngineCache = [];
+
     public string $filter = 'all';
 
     public int $displayLimit = 4;
@@ -480,6 +482,9 @@ class ScanMonitor extends Component
             'target_username' => $metadata->target_username ?? null,
             'related_usernames' => $metadata->related_usernames ?? [],
             'runtime_config_path' => $metadata->runtime_config_path ?? null,
+            'browser_engine' => $this->browserEngineFromRuntimeConfigPath(
+                $metadata->runtime_config_path ?? null,
+            ),
             'is_idle_suspect' => $ageMinutes >= self::SCRAPER_PROCESS_IDLE_MINUTES
                 && $cpu <= self::SCRAPER_PROCESS_LOW_CPU_PERCENT,
         ];
@@ -816,6 +821,7 @@ class ScanMonitor extends Component
                             ?: $this->screenshotUrlFromPayload($payload)
                         : null,
                     'is_running' => true,
+                    'payload' => $payload,
                     'metrics' => $this->profileMetrics(
                         $scan->posts_count,
                         $scan->followers_count,
@@ -902,6 +908,7 @@ class ScanMonitor extends Component
                     'screenshot_url' => $this->storageUrl($scan->screenshot_path)
                         ?: $this->screenshotUrlFromPayload($payload),
                     'is_running' => false,
+                    'payload' => $payload,
                     'metrics' => $this->profileMetrics(
                         $scan->posts_count,
                         $scan->followers_count,
@@ -986,6 +993,7 @@ class ScanMonitor extends Component
                     ),
                     'screenshot_url' => $this->screenshotUrlFromPayload($payload),
                     'is_running' => false,
+                    'payload' => $payload,
                     'context_label' => $scan->scan_mode
                         ? 'Modus: '.str_replace('_', ' ', (string) $scan->scan_mode)
                         : null,
@@ -1061,6 +1069,7 @@ class ScanMonitor extends Component
                     ),
                     'screenshot_url' => $this->screenshotUrlFromPayload($payload),
                     'is_running' => false,
+                    'payload' => $payload,
                     'metrics' => [
                         $this->metric('Beobachtet', $scan->observed_count),
                         $this->metric('Neu', $scan->new_count),
@@ -1132,6 +1141,7 @@ class ScanMonitor extends Component
                     ),
                     'screenshot_url' => $this->screenshotUrlFromPayload($payload),
                     'is_running' => false,
+                    'payload' => $payload,
                     'metrics' => [
                         $this->metric('Gefunden', $scan->suggestions_observed_count),
                         $this->metric('Geprueft', $scan->suggestions_checked_count),
@@ -1211,6 +1221,7 @@ class ScanMonitor extends Component
                     ),
                     'screenshot_url' => $this->screenshotUrlFromPayload($payload),
                     'is_running' => $isRunning,
+                    'payload' => $payload,
                     'context_label' => $scan->public_username
                         ? 'Pruefprofil @'.ltrim((string) $scan->public_username, '@')
                         : null,
@@ -1243,6 +1254,20 @@ class ScanMonitor extends Component
                 $scan->processes = $this->matchingProcessesForScan($scan, $scraperProcesses, $activeState);
                 $scan->process_tree = $this->buildScraperProcessTrees($scan->processes);
                 $scan->runtime_details_open = (bool) ($this->expandedRuntimeDetails[$scan->scan_key] ?? false);
+                $eventBrowserEngine = $scan->events
+                    ->map(fn (object $event): ?string => $this->browserEngineFromPayload($event->payload ?? []))
+                    ->filter()
+                    ->first();
+                $processBrowserEngine = $scan->processes
+                    ->pluck('browser_engine')
+                    ->filter()
+                    ->first();
+                $this->setScanBrowserEngine(
+                    $scan,
+                    $eventBrowserEngine
+                        ?: $scan->browser_engine
+                        ?: $processBrowserEngine,
+                );
 
                 return $scan;
             })
@@ -1648,7 +1673,7 @@ class ScanMonitor extends Component
     {
         $scanType = (string) ($attributes['scan_type'] ?? 'analysis');
 
-        return (object) [
+        $scan = (object) [
             'scan_key' => (string) $attributes['scan_key'],
             'scan_type' => $scanType,
             'scan_type_label' => $this->scanTypeLabel($scanType),
@@ -1669,6 +1694,9 @@ class ScanMonitor extends Component
             'profile_image_url' => $attributes['profile_image_url'] ?? null,
             'screenshot_url' => $attributes['screenshot_url'] ?? null,
             'is_running' => (bool) ($attributes['is_running'] ?? false),
+            'browser_engine' => null,
+            'browser_engine_label' => 'Nicht erfasst',
+            'browser_engine_classes' => 'bg-slate-100 text-slate-600 ring-slate-200',
             'metrics' => collect($attributes['metrics'] ?? [])->take(3)->values(),
             'events' => collect(),
             'processes' => collect(),
@@ -1676,6 +1704,103 @@ class ScanMonitor extends Component
             'active_scan_state' => null,
             'runtime_details_open' => false,
         ];
+
+        $this->setScanBrowserEngine(
+            $scan,
+            $attributes['browser_engine']
+                ?? $this->browserEngineFromPayload($attributes['payload'] ?? []),
+        );
+
+        return $scan;
+    }
+
+    private function setScanBrowserEngine(object $scan, mixed $engine): void
+    {
+        $normalized = $this->normalizeBrowserEngine($engine);
+
+        $scan->browser_engine = $normalized;
+        $scan->browser_engine_label = match ($normalized) {
+            'cloak' => 'Cloak',
+            'chrome' => 'Chrome',
+            'cloak-with-chrome-fallback' => 'Cloak bevorzugt',
+            default => 'Nicht erfasst',
+        };
+        $scan->browser_engine_classes = match ($normalized) {
+            'cloak' => 'bg-violet-100 text-violet-800 ring-violet-200',
+            'chrome' => 'bg-sky-100 text-sky-800 ring-sky-200',
+            'cloak-with-chrome-fallback' => 'bg-indigo-100 text-indigo-800 ring-indigo-200',
+            default => 'bg-slate-100 text-slate-600 ring-slate-200',
+        };
+    }
+
+    private function browserEngineFromPayload(mixed $payload): ?string
+    {
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        foreach (['browserEngine', 'browser_engine', 'activeBrowserEngine'] as $key) {
+            if (array_key_exists($key, $payload)) {
+                $engine = $this->normalizeBrowserEngine($payload[$key]);
+
+                if ($engine !== null) {
+                    return $engine;
+                }
+            }
+        }
+
+        foreach ($payload as $value) {
+            if (! is_array($value)) {
+                continue;
+            }
+
+            $engine = $this->browserEngineFromPayload($value);
+
+            if ($engine !== null) {
+                return $engine;
+            }
+        }
+
+        return null;
+    }
+
+    private function browserEngineFromRuntimeConfigPath(mixed $path): ?string
+    {
+        if (! is_scalar($path) || trim((string) $path) === '') {
+            return null;
+        }
+
+        $path = trim((string) $path);
+
+        if (array_key_exists($path, $this->runtimeBrowserEngineCache)) {
+            return $this->runtimeBrowserEngineCache[$path];
+        }
+
+        if (! is_file($path) || ! is_readable($path)) {
+            return $this->runtimeBrowserEngineCache[$path] = null;
+        }
+
+        try {
+            $payload = json_decode((string) file_get_contents($path), true);
+        } catch (\Throwable) {
+            $payload = null;
+        }
+
+        return $this->runtimeBrowserEngineCache[$path] = $this->browserEngineFromPayload($payload);
+    }
+
+    private function normalizeBrowserEngine(mixed $engine): ?string
+    {
+        if (! is_scalar($engine)) {
+            return null;
+        }
+
+        return match (strtolower(trim((string) $engine))) {
+            'chrome', 'chromium', 'puppeteer' => 'chrome',
+            'cloak', 'cloakbrowser' => 'cloak',
+            'cloak-with-chrome-fallback', 'cloak_with_chrome_fallback', 'cloak-fallback' => 'cloak-with-chrome-fallback',
+            default => null,
+        };
     }
 
     private function resolveScanType(array $payload, string $message = ''): string

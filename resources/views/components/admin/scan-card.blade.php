@@ -51,6 +51,12 @@
                 <span class="rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ring-1 {{ $scan->scan_type_classes }}">
                     {{ $scan->scan_type_label }}
                 </span>
+                <span
+                    class="rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ring-1 {{ $scan->browser_engine_classes }}"
+                    title="Verwendete Browser-Engine"
+                >
+                    Browser: {{ $scan->browser_engine_label }}
+                </span>
                 @if($scan->context_label)
                     <span class="truncate text-[11px] font-semibold text-slate-500">{{ $scan->context_label }}</span>
                 @endif
