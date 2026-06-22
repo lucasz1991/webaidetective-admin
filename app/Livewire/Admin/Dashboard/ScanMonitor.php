@@ -1120,6 +1120,7 @@ class ScanMonitor extends Component
             ])
             ->map(function (object $scan): object {
                 $payload = $this->decodePayload($scan->raw_payload);
+                $isRunning = $this->suggestionScanIsRunning($scan, $payload);
 
                 return $this->makeScan([
                     'scan_key' => 'suggestions-'.$scan->scan_id,
@@ -1140,7 +1141,7 @@ class ScanMonitor extends Component
                         $scan->instagram_profile_image_path ?? $scan->profile_image_path,
                     ),
                     'screenshot_url' => $this->screenshotUrlFromPayload($payload),
-                    'is_running' => false,
+                    'is_running' => $isRunning,
                     'payload' => $payload,
                     'metrics' => [
                         $this->metric('Gefunden', $scan->suggestions_observed_count),
@@ -1575,7 +1576,7 @@ class ScanMonitor extends Component
             ->values();
         $matchedPids = collect();
 
-        if ($activePids->isNotEmpty()) {
+        if ((bool) $scan->is_running && $activePids->isNotEmpty()) {
             $matchedPids = $matchedPids->merge(
                 $processes
                     ->filter(fn (object $process): bool => $this->processBelongsToPids($process, $activePids))
@@ -1941,6 +1942,27 @@ class ScanMonitor extends Component
             && ! (bool) data_get($payload, 'gracefullyStopped', false)
             && ! (bool) data_get($payload, 'stoppedForRateLimit', false)
             && strtotime((string) $scan->scanned_at) >= now()->subHours(self::RUNNING_WINDOW_HOURS)->timestamp;
+    }
+
+    private function suggestionScanIsRunning(object $scan, array $payload): bool
+    {
+        $progressStatus = strtolower(trim((string) data_get($payload, 'progressStatus', '')));
+        $statusLevel = strtolower(trim((string) data_get($payload, 'statusLevel', '')));
+        $terminalStatus = strtolower(trim((string) data_get($payload, 'terminalStatus', '')));
+
+        if (
+            $progressStatus !== 'in_progress'
+            || in_array($statusLevel, ['success', 'error', 'cancelled'], true)
+            || in_array($terminalStatus, ['success', 'error', 'cancelled'], true)
+            || (bool) data_get($payload, 'gracefullyStopped', false)
+        ) {
+            return false;
+        }
+
+        $scannedAt = strtotime((string) ($scan->scanned_at ?? ''));
+
+        return $scannedAt !== false
+            && $scannedAt >= now()->subHours(self::RUNNING_WINDOW_HOURS)->timestamp;
     }
 
     private function screenshotUrlFromPayload(array $payload): ?string
